@@ -1,0 +1,11 @@
+{
+  "name": "tdd-enforcer",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "picomatch": "^4.0.4"
+  },
+  "devDependencies": {
+    "vitest": "^3"
+  }
+}
