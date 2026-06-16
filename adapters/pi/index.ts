@@ -1,7 +1,7 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { loadPhaseState, loadConfig, savePhaseState, initGit } from "../../engine/index.js";
+import { loadPhaseState, loadConfig, savePhaseState, initGit, snapshot } from "../../engine/index.js";
 import { registerTools } from "./tools.js";
 import { registerHooks } from "./hooks.js";
 import { loadTddState } from "./helpers.js";
@@ -79,6 +79,12 @@ export default function (pi: ExtensionAPI) {
       } else {
         tddLog(tddDir, "DEBUG", "tdd:on: git repo already exists");
       }
+
+      // Snapshot working tree so stale baseline doesn't nuke user changes
+      snapshot(root, state.current);
+      tddLog(tddDir, "INFO", "tdd:on: snapshot taken", {
+        phase: state.current,
+      });
 
       state.enabled = true;
       savePhaseState(root, state);

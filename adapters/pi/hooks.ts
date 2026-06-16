@@ -2,7 +2,7 @@ import { join, relative } from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { isToolCallEventType, isBashToolResult } from "@earendil-works/pi-coding-agent";
 import { isAllowed } from "../../engine/enforce.js";
-import { changesSinceSnapshot, restoreFiles } from "../../engine/git.js";
+import { changesSinceSnapshot } from "../../engine/git.js";
 import { loadTddState } from "./helpers.js";
 import { tddLog } from "./log.js";
 
@@ -98,13 +98,10 @@ export function registerHooks(pi: ExtensionAPI): void {
       return;
     }
 
-    tddLog(tddDir, "INFO", "tool_result: reverting violations", {
+    tddLog(tddDir, "WARN", "tool_result: locked files modified by bash", {
       phase,
       violations,
-      allChanged: changed,
     });
-
-    restoreFiles(root, violations);
 
     const existingText = event.content.map((c) => ("text" in c ? c.text : "")).join("");
     return {
@@ -113,8 +110,9 @@ export function registerHooks(pi: ExtensionAPI): void {
           type: "text",
           text:
             existingText +
-            `\n\n⚠️ TDD: Bash modified files locked in ${phase.toUpperCase()} phase. ` +
-            `Reverted: ${violations.join(", ")}`,
+            `\n\n⚠️ ${phase.toUpperCase()}: bash modified locked files: ${violations.join(", ")}\n` +
+            `next_tdd_phase blocked until reverted. ` +
+            `Inspect with: cd .pi/tdd && git diff HEAD -- ${violations[0]}`,
         },
       ],
     };
