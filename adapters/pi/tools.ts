@@ -38,10 +38,6 @@ export function registerTools(pi: ExtensionAPI): void {
       const { state, config } = tdd;
       const from = state.current;
       const to = nextPhase(from);
-      if (!to) {
-        tddLog(tddDir, "WARN", "next_tdd_phase: no next phase", { from });
-        return { content: [{ type: "text", text: `No next phase from ${from}.` }], details: {} };
-      }
 
       tddLog(tddDir, "INFO", "next_tdd_phase: starting", { from, to });
 
