@@ -43,7 +43,7 @@ export function loadTddState(root: string): TddLoadResult {
   }
 
   if (!state.enabled) {
-    return { ok: false, reason: "TDD is not enabled. Run /tdd to enable it." };
+    return { ok: false, reason: "TDD is not enabled. Run /tdd:on to enable it." };
   }
 
   // Heal git if missing

@@ -55,7 +55,7 @@ export function registerTools(pi: ExtensionAPI): void {
               text:
                 `BLOCKED: files not allowed in ${from.toUpperCase()} phase:\n` +
                 violations.map((f) => `  - ${f}`).join("\n") +
-                "\nRevert or remove them before proceeding.",
+                `\nRevert or remove them before proceeding.\n\nInspect with: cd .pi/tdd && git diff HEAD -- ${violations[0]}`,
             },
           ],
           details: {},

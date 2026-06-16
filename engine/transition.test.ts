@@ -54,7 +54,7 @@ describe("checkGate", () => {
     it("blocks when tests pass", async () => {
       const r = await checkGate("red", "green", makeRunner(true), testConfig);
       expect(r.passed).toBe(false);
-      expect(r.message).toMatch(/break a test/i);
+      expect(r.message).toMatch(/transitioning to GREEN/i);
     });
   });
 
@@ -68,7 +68,7 @@ describe("checkGate", () => {
     it("blocks when tests fail", async () => {
       const r = await checkGate("green", "refactor", makeRunner(false), testConfig);
       expect(r.passed).toBe(false);
-      expect(r.message).toMatch(/failing/i);
+      expect(r.message).toMatch(/transitioning to REFACTOR/i);
     });
   });
 
@@ -82,17 +82,10 @@ describe("checkGate", () => {
     it("blocks when tests fail", async () => {
       const r = await checkGate("refactor", "red", makeRunner(false), testConfig);
       expect(r.passed).toBe(false);
-      expect(r.message).toMatch(/failing/i);
+      expect(r.message).toMatch(/transitioning to RED/i);
     });
   });
 
-  describe("unknown transition", () => {
-    it("blocks with message containing the transition string", async () => {
-      const r = await checkGate("green", "red" as any, makeRunner(true), testConfig);
-      expect(r.passed).toBe(false);
-      expect(r.message).toContain("green→red");
-    });
-  });
 
   it("passes test commands to the runner", async () => {
     let captured: string[] | undefined;

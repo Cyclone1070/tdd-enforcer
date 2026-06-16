@@ -36,23 +36,29 @@ export async function checkGate(
       if (result.passed) {
         return {
           passed: false,
-          message: "Tests pass. Break a test first before transitioning to GREEN.",
+          message: "Tests pass. Add a failing test before transitioning to GREEN.",
         };
       }
       return { passed: true, message: "Tests fail — proceed to GREEN." };
 
     case "green→refactor":
-    case "refactor→red":
       if (!result.passed) {
         return {
           passed: false,
-          message: "Tests must pass before transitioning. Fix failing tests first.",
+          message: "Tests fail. Fix them before transitioning to REFACTOR.",
         };
       }
       return { passed: true, message: "All tests pass — proceeding." };
 
-    default:
-      return { passed: false, message: `Unknown transition: ${from}→${to}` };
+    case "refactor→red":
+      if (!result.passed) {
+        return {
+          passed: false,
+          message: "Tests fail. Fix them before transitioning to RED.",
+        };
+      }
+      return { passed: true, message: "All tests pass — proceeding." };
+
   }
 }
 
