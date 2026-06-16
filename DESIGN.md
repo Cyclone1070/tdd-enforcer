@@ -20,7 +20,7 @@ RED ──(tests fail)──► GREEN ──(tests pass)──► REFACTOR ─�
 
 ### `previous_tdd_phase`
 
-Reverts to the previous snapshot. Pops the phase stack, restores working tree to exact prior state. No gate checks — just revert. Must have clear warning in the tool schema that this will revert all changes in the current state.
+Reverts to the previous snapshot by parsing the phase label from the last git snapshot commit. Restores working tree to exact prior state. No gate checks — just revert. Must have clear warning in the tool schema that this will revert all changes in the current state.
 
 ---
 
@@ -57,7 +57,7 @@ A separate git repository at `.pi/tdd/.git/` that tracks the project root as its
 ```
 .pi/tdd/
 ├── .gitignore           # private git — excludes file patterns from snapshots
-├── phase.json           # {current: "red", stack: ["s1","s2","s3"]}
+├── state.json           # {current: "red", enabled: true}
 ├── rules.json           # user config
 └── .git/                # private git — init with --git-dir
 ```
@@ -75,7 +75,7 @@ A separate git repository at `.pi/tdd/.git/` that tracks the project root as its
 
 **On `previous_tdd_phase` (revert):**
 - `git restore --source=<prev-commit> --worktree -- .` — restores project to exact prior snapshot
-- Pop the stack in `phase.json`
+- Pop the last snapshot commit in the private git repo
 
 ### Benefits of private git
 
@@ -147,17 +147,16 @@ If the user wants to exclude additional files from TDD snapshots only, they can 
 
 ## Phase State Persistence
 
-Stored in `.pi/tdd/phase.json`:
+Stored in `.pi/tdd/state.json`:
 
 ```json
 {
   "current": "green",
-  "enabled": true,
-  "stack": ["commit-hash-1", "commit-hash-2", "commit-hash-3"]
+  "enabled": true
 }
 ```
 
-The git commit hashes anchor each snapshot. `previous_tdd_phase` restores to the parent of the latest commit and pops the stack. Survives session restarts and extension reloads.
+The snapshot history lives in the private git repo's commit log — no explicit stack array needed. `previous_tdd_phase` reads the phase label from the HEAD commit message and restores to the parent. Survives session restarts and extension reloads.
 
 ---
 

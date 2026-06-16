@@ -23,16 +23,16 @@ export function loadTddState(root: string): TddLoadResult {
     return { ok: false, reason: "Missing .pi/tdd/rules.json. See the tdd-init skill to learn how to set up TDD configs." };
   }
 
-  const phasePath = join(tddDir, "phase.json");
+  const phasePath = join(tddDir, "state.json");
   if (!existsSync(phasePath)) {
-    return { ok: false, reason: "Missing .pi/tdd/phase.json. See the tdd-init skill to learn how to set up TDD configs." };
+    return { ok: false, reason: "Missing .pi/tdd/state.json. See the tdd-init skill to learn how to set up TDD configs." };
   }
 
   let state: PhaseState;
   try {
     state = loadPhaseState(root);
   } catch (e) {
-    return { ok: false, reason: `Invalid .pi/tdd/phase.json: ${(e as Error).message}` };
+    return { ok: false, reason: `Invalid .pi/tdd/state.json: ${(e as Error).message}` };
   }
 
   let config: Config;

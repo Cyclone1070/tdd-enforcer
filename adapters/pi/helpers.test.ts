@@ -44,7 +44,7 @@ describe("loadTddState", () => {
     });
   });
 
-  it("returns missing phase.json when rules exists but phase missing", () => {
+  it("returns missing state.json when rules exists but state missing", () => {
     withTempDir((dir) => {
       mkdirSync(join(dir, ".pi", "tdd"), { recursive: true });
       writeFileSync(
@@ -54,11 +54,11 @@ describe("loadTddState", () => {
       );
       const result = loadTddState(dir);
       expect(result.ok).toBe(false);
-      expect(result.reason).toContain("phase.json");
+      expect(result.reason).toContain("state.json");
     });
   });
 
-  it("returns invalid phase.json error for malformed JSON", () => {
+  it("returns invalid state.json error for malformed JSON", () => {
     withTempDir((dir) => {
       mkdirSync(join(dir, ".pi", "tdd"), { recursive: true });
       writeFileSync(
@@ -66,10 +66,10 @@ describe("loadTddState", () => {
         JSON.stringify(validRules),
         "utf-8",
       );
-      writeFileSync(join(dir, ".pi", "tdd", "phase.json"), "not json", "utf-8");
+      writeFileSync(join(dir, ".pi", "tdd", "state.json"), "not json", "utf-8");
       const result = loadTddState(dir);
       expect(result.ok).toBe(false);
-      expect(result.reason).toContain("Invalid .pi/tdd/phase.json");
+      expect(result.reason).toContain("Invalid .pi/tdd/state.json");
     });
   });
 
@@ -82,7 +82,7 @@ describe("loadTddState", () => {
         "utf-8",
       );
       writeFileSync(
-        join(dir, ".pi", "tdd", "phase.json"),
+        join(dir, ".pi", "tdd", "state.json"),
         JSON.stringify(validPhase),
         "utf-8",
       );
@@ -92,7 +92,7 @@ describe("loadTddState", () => {
     });
   });
 
-  it("returns disabled error when phase.json has enabled: false", () => {
+  it("returns disabled error when state.json has enabled: false", () => {
     withTempDir((dir) => {
       mkdirSync(join(dir, ".pi", "tdd"), { recursive: true });
       writeFileSync(
@@ -101,7 +101,7 @@ describe("loadTddState", () => {
         "utf-8",
       );
       writeFileSync(
-        join(dir, ".pi", "tdd", "phase.json"),
+        join(dir, ".pi", "tdd", "state.json"),
         JSON.stringify({ enabled: false, current: "red" }),
         "utf-8",
       );
@@ -120,7 +120,7 @@ describe("loadTddState", () => {
         "utf-8",
       );
       writeFileSync(
-        join(dir, ".pi", "tdd", "phase.json"),
+        join(dir, ".pi", "tdd", "state.json"),
         JSON.stringify(validPhase),
         "utf-8",
       );
@@ -144,7 +144,7 @@ describe("loadTddState", () => {
         "utf-8",
       );
       writeFileSync(
-        join(dir, ".pi", "tdd", "phase.json"),
+        join(dir, ".pi", "tdd", "state.json"),
         JSON.stringify(validPhase),
         "utf-8",
       );
@@ -169,7 +169,7 @@ describe("loadTddState", () => {
         "utf-8",
       );
       writeFileSync(
-        join(dir, ".pi", "tdd", "phase.json"),
+        join(dir, ".pi", "tdd", "state.json"),
         JSON.stringify(validPhase),
         "utf-8",
       );
@@ -182,7 +182,7 @@ describe("loadTddState", () => {
     });
   });
 
-  it("passes through the phase.json validation error for invalid current phase", () => {
+  it("passes through the state.json validation error for invalid current phase", () => {
     withTempDir((dir) => {
       mkdirSync(join(dir, ".pi", "tdd"), { recursive: true });
       writeFileSync(
@@ -191,13 +191,13 @@ describe("loadTddState", () => {
         "utf-8",
       );
       writeFileSync(
-        join(dir, ".pi", "tdd", "phase.json"),
+        join(dir, ".pi", "tdd", "state.json"),
         JSON.stringify({ enabled: true, current: "blurple" }),
         "utf-8",
       );
       const result = loadTddState(dir);
       expect(result.ok).toBe(false);
-      expect(result.reason).toContain("Invalid .pi/tdd/phase.json");
+      expect(result.reason).toContain("Invalid .pi/tdd/state.json");
     });
   });
 });

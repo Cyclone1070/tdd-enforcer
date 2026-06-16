@@ -6,7 +6,7 @@ const TDD_DIR = ".pi/tdd";
 const VALID_PHASES = new Set(["red", "green", "refactor"]);
 
 export function phaseStatePath(projectRoot: string): string {
-  return join(projectRoot, TDD_DIR, "phase.json");
+  return join(projectRoot, TDD_DIR, "state.json");
 }
 
 function ensureDir(path: string): void {
@@ -22,7 +22,7 @@ export function loadPhaseState(projectRoot: string): PhaseState {
   const parsed = JSON.parse(raw) as PhaseState;
 
   if (typeof parsed.current !== "string" || !VALID_PHASES.has(parsed.current)) {
-    throw new Error(`phase.json: invalid phase "${String(parsed.current)}". Must be red, green, or refactor.`);
+    throw new Error(`state.json: invalid phase "${String(parsed.current)}". Must be red, green, or refactor.`);
   }
 
   return {

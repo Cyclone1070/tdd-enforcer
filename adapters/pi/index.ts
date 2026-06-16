@@ -29,10 +29,10 @@ export default function (pi: ExtensionAPI) {
         return;
       }
 
-      const phasePath = join(tddDir, "phase.json");
+      const phasePath = join(tddDir, "state.json");
       if (!existsSync(phasePath)) {
-        tddLog(tddDir, "WARN", "tdd:on: missing phase.json");
-        ctx.ui.notify("Missing .pi/tdd/phase.json. See the tdd-init skill to learn how to set up TDD configs.", "error");
+        tddLog(tddDir, "WARN", "tdd:on: missing state.json");
+        ctx.ui.notify("Missing .pi/tdd/state.json. See the tdd-init skill to learn how to set up TDD configs.", "error");
         return;
       }
 
@@ -40,10 +40,10 @@ export default function (pi: ExtensionAPI) {
       try {
         state = loadPhaseState(root);
       } catch (e) {
-        tddLog(tddDir, "WARN", "tdd:on: invalid phase.json", {
+        tddLog(tddDir, "WARN", "tdd:on: invalid state.json", {
           error: (e as Error).message,
         });
-        ctx.ui.notify("Invalid .pi/tdd/phase.json. Fix or delete it, then run /tdd:on again.", "error");
+        ctx.ui.notify("Invalid .pi/tdd/state.json. Fix or delete it, then run /tdd:on again.", "error");
         return;
       }
 
@@ -105,10 +105,10 @@ export default function (pi: ExtensionAPI) {
       try {
         state = loadPhaseState(root);
       } catch (e) {
-        tddLog(tddDir, "WARN", "tdd:off: invalid phase.json", {
+        tddLog(tddDir, "WARN", "tdd:off: invalid state.json", {
           error: (e as Error).message,
         });
-        ctx.ui.notify("Invalid .pi/tdd/phase.json. Fix or delete it, then run /tdd:off again.", "error");
+        ctx.ui.notify("Invalid .pi/tdd/state.json. Fix or delete it, then run /tdd:off again.", "error");
         return;
       }
 

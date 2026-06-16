@@ -21,12 +21,12 @@ describe("loadPhaseState", () => {
     });
   });
 
-  it("returns parsed state from phase.json", () => {
+  it("returns parsed state from state.json", () => {
     withTempDir((dir) => {
       const tddDir = join(dir, ".pi", "tdd");
       mkdirSync(tddDir, { recursive: true });
       writeFileSync(
-        join(tddDir, "phase.json"),
+        join(tddDir, "state.json"),
         JSON.stringify({ enabled: true, current: "green" }),
         "utf-8",
       );
@@ -41,7 +41,7 @@ describe("loadPhaseState", () => {
       const tddDir = join(dir, ".pi", "tdd");
       mkdirSync(tddDir, { recursive: true });
       writeFileSync(
-        join(tddDir, "phase.json"),
+        join(tddDir, "state.json"),
         JSON.stringify({ enabled: true, current: "blurple" }),
         "utf-8",
       );
@@ -54,7 +54,7 @@ describe("loadPhaseState", () => {
       const tddDir = join(dir, ".pi", "tdd");
       mkdirSync(tddDir, { recursive: true });
       writeFileSync(
-        join(tddDir, "phase.json"),
+        join(tddDir, "state.json"),
         JSON.stringify({ enabled: false, current: "off" }),
         "utf-8",
       );
@@ -66,14 +66,14 @@ describe("loadPhaseState", () => {
     withTempDir((dir) => {
       const tddDir = join(dir, ".pi", "tdd");
       mkdirSync(tddDir, { recursive: true });
-      writeFileSync(join(tddDir, "phase.json"), "not json{{{", "utf-8");
+      writeFileSync(join(tddDir, "state.json"), "not json{{{", "utf-8");
       expect(() => loadPhaseState(dir)).toThrow();
     });
   });
 });
 
 describe("savePhaseState", () => {
-  it("writes phase.json and can be read back", () => {
+  it("writes state.json and can be read back", () => {
     withTempDir((dir) => {
       savePhaseState(dir, { enabled: true, current: "refactor" });
       const state = loadPhaseState(dir);
