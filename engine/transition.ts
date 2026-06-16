@@ -36,7 +36,7 @@ export async function checkGate(
       if (result.passed) {
         return {
           passed: false,
-          message: "Tests pass. Add a failing test before transitioning to GREEN.",
+          message: "Tests passed. Add a failing test before transitioning to GREEN.",
         };
       }
       return { passed: true, message: "Tests fail — proceed to GREEN." };
@@ -45,7 +45,7 @@ export async function checkGate(
       if (!result.passed) {
         return {
           passed: false,
-          message: "Tests fail. Fix them before transitioning to REFACTOR.",
+          message: "Tests failed. Fix them before transitioning to REFACTOR.",
         };
       }
       return { passed: true, message: "All tests pass — proceeding." };
@@ -54,7 +54,7 @@ export async function checkGate(
       if (!result.passed) {
         return {
           passed: false,
-          message: "Tests fail. Fix them before transitioning to RED.",
+          message: "Tests failed. Fix them before transitioning to RED.",
         };
       }
       return { passed: true, message: "All tests pass — proceeding." };

@@ -1,7 +1,7 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { loadPhaseState, loadConfig, savePhaseState, initGit, snapshot } from "../../engine/index.js";
+import { loadPhaseState, loadConfig, savePhaseState, initGit, resetGit, snapshot } from "../../engine/index.js";
 import { registerTools } from "./tools.js";
 import { registerHooks } from "./hooks.js";
 import { loadTddState } from "./helpers.js";
@@ -159,6 +159,49 @@ export default function (pi: ExtensionAPI) {
         `Impl files: ${greenGlobs}\n` +
         `Test commands: ${commands}`,
         "info"
+      );
+    },
+  });
+
+  pi.registerCommand("tdd:reset", {
+    description:
+      "WARNING: Destroys ALL TDD snapshot history and resets to RED phase. " +
+      "Working tree is preserved. Run /tdd:on to re-enable after reset.",
+    handler: async (_args: string, ctx: ExtensionContext) => {
+      const root = ctx.cwd;
+      const tddDir = join(root, ".pi", "tdd");
+
+      tddLog(tddDir, "INFO", "tdd:reset: starting");
+
+      if (!existsSync(tddDir)) {
+        tddLog(tddDir, "WARN", "tdd:reset: missing .pi/tdd/ directory");
+        ctx.ui.notify("No .pi/tdd/ directory found — nothing to reset.", "error");
+        return;
+      }
+
+      // Nuke git history and re-init
+      try {
+        resetGit(root);
+        tddLog(tddDir, "INFO", "tdd:reset: git reset and re-initialised");
+      } catch (e) {
+        tddLog(tddDir, "ERROR", "tdd:reset: git reset failed", {
+          error: (e as Error).message,
+        });
+        ctx.ui.notify("Failed to reset private git repo.", "error");
+        return;
+      }
+
+      // Snapshot current working tree
+      snapshot(root, "red");
+      tddLog(tddDir, "INFO", "tdd:reset: snapshot taken");
+
+      // Reset state to RED (disabled, user must run /tdd:on)
+      savePhaseState(root, { enabled: false, current: "red" });
+      tddLog(tddDir, "INFO", "tdd:reset: complete");
+
+      ctx.ui.notify(
+        "TDD snapshot history reset. Run /tdd:on to re-enable enforcement.",
+        "warning",
       );
     },
   });

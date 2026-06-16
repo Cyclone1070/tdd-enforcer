@@ -1,5 +1,5 @@
 import { execSync, type ExecSyncOptions } from "node:child_process";
-import { existsSync, mkdirSync, writeFileSync, unlinkSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync, unlinkSync, rmSync } from "node:fs";
 import { join } from "node:path";
 
 const TDD_DIR = ".pi/tdd";
@@ -38,6 +38,16 @@ export function initGit(projectRoot: string): void {
 
   gitExec("add -A", projectRoot, { stdio: "pipe" as const });
   gitExec('commit --allow-empty -m "tdd: init"', projectRoot, { stdio: "pipe" as const });
+}
+
+/** Destroy the private git repo and re-init from scratch. */
+export function resetGit(projectRoot: string): void {
+  const tddPath = join(projectRoot, TDD_DIR);
+  const gitDir = join(tddPath, ".git");
+  if (existsSync(gitDir)) {
+    rmSync(gitDir, { recursive: true, force: true });
+  }
+  initGit(projectRoot);
 }
 
 /** Stage all + commit with --allow-empty so every phase transition has a labeled commit. */
