@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { isAllowed } from "./enforce.js";
+import { isAllowed, disallowedFiles } from "./enforce.js";
 import type { Config } from "./types.js";
 
 const testConfig: Config = {
@@ -51,5 +51,39 @@ describe("isAllowed", () => {
   it("handles nested glob patterns", () => {
     expect(isAllowed("src/deep/nested/file.ts", "green", testConfig)).toBe(true);
     expect(isAllowed("tests/deep/nested/test.test.ts", "red", testConfig)).toBe(true);
+  });
+});
+
+describe("disallowedFiles", () => {
+  it("returns empty for refactor phase", () => {
+    expect(disallowedFiles(["src/main.ts", "tests/foo.test.ts"], "refactor", testConfig)).toEqual([]);
+  });
+
+  it("returns empty when input list is empty", () => {
+    expect(disallowedFiles([], "red", testConfig)).toEqual([]);
+    expect(disallowedFiles([], "green", testConfig)).toEqual([]);
+  });
+
+  it("filters out green files in red phase", () => {
+    const files = ["src/main.ts", "README.md", "tests/foo.test.ts"];
+    expect(disallowedFiles(files, "red", testConfig)).toEqual(["src/main.ts"]);
+  });
+
+  it("filters out red files in green phase", () => {
+    const files = ["tests/foo.test.ts", "README.md", "src/main.ts"];
+    expect(disallowedFiles(files, "green", testConfig)).toEqual(["tests/foo.test.ts"]);
+  });
+
+  it("allows free files in both phases", () => {
+    const free = ["README.md", "package.json", "docs/guide.md"];
+    expect(disallowedFiles(free, "red", testConfig)).toEqual([]);
+    expect(disallowedFiles(free, "green", testConfig)).toEqual([]);
+  });
+
+  it("blocks everything when all files match the other phase", () => {
+    const redFiles = ["tests/a.test.ts", "specs/b.spec.ts"];
+    const greenFiles = ["src/c.ts", "lib/d.ts"];
+    expect(disallowedFiles(redFiles, "green", testConfig)).toEqual(redFiles);
+    expect(disallowedFiles(greenFiles, "red", testConfig)).toEqual(greenFiles);
   });
 });

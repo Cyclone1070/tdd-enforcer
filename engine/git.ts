@@ -86,9 +86,10 @@ export function hasParent(projectRoot: string): boolean {
   }
 }
 
-/** Hard reset — discard all uncommitted changes, keep HEAD. */
+/** Hard reset — discard all uncommitted changes (tracked and untracked), keep HEAD. */
 export function resetHard(projectRoot: string): void {
   gitExec("reset --hard", projectRoot, { stdio: "pipe" as const });
+  gitExec("clean -fd", projectRoot, { stdio: "pipe" as const });
 }
 
 /** Soft reset — remove last commit, keep working tree content as unstaged. */
