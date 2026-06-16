@@ -1,11 +1,15 @@
 {
   "name": "tdd-enforcer",
-  "private": true,
+  "version": "0.1.0",
   "type": "module",
+  "keywords": ["pi-package"],
   "dependencies": {
     "picomatch": "^4.0.4"
   },
   "devDependencies": {
     "vitest": "^3"
+  },
+  "pi": {
+    "extensions": ["./adapters/pi/index.ts"]
   }
 }
