@@ -29,10 +29,6 @@ export async function checkGate(
   testRunner: TestRunner,
   config: Config,
 ): Promise<GateResult> {
-  if (config.testCommands.length === 0) {
-    return { passed: true, message: "No test commands configured — gate skipped." };
-  }
-
   const result = await testRunner(config.testCommands, config.timeoutSeconds);
 
   switch (`${from}→${to}` as Transition) {

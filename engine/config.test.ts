@@ -121,5 +121,56 @@ describe("loadConfig", () => {
         expect(() => loadConfig(dir)).toThrow();
       });
     });
+
+    it("throws when allowedRedPhaseFiles is empty", () => {
+      withTempDir((dir) => {
+        const tddDir = join(dir, ".pi", "tdd");
+        mkdirSync(tddDir, { recursive: true });
+        writeFileSync(
+          join(tddDir, "rules.json"),
+          JSON.stringify({
+            allowedRedPhaseFiles: [],
+            allowedGreenPhaseFiles: ["src/**/*.ts"],
+            testCommands: ["npm test"],
+          }),
+          "utf-8",
+        );
+        expect(() => loadConfig(dir)).toThrow();
+      });
+    });
+
+    it("throws when allowedGreenPhaseFiles is empty", () => {
+      withTempDir((dir) => {
+        const tddDir = join(dir, ".pi", "tdd");
+        mkdirSync(tddDir, { recursive: true });
+        writeFileSync(
+          join(tddDir, "rules.json"),
+          JSON.stringify({
+            allowedRedPhaseFiles: ["tests/**/*.test.ts"],
+            allowedGreenPhaseFiles: [],
+            testCommands: ["npm test"],
+          }),
+          "utf-8",
+        );
+        expect(() => loadConfig(dir)).toThrow();
+      });
+    });
+
+    it("throws when testCommands is empty", () => {
+      withTempDir((dir) => {
+        const tddDir = join(dir, ".pi", "tdd");
+        mkdirSync(tddDir, { recursive: true });
+        writeFileSync(
+          join(tddDir, "rules.json"),
+          JSON.stringify({
+            allowedRedPhaseFiles: ["tests/**/*.test.ts"],
+            allowedGreenPhaseFiles: ["src/**/*.ts"],
+            testCommands: [],
+          }),
+          "utf-8",
+        );
+        expect(() => loadConfig(dir)).toThrow();
+      });
+    });
   });
 });

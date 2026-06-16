@@ -42,17 +42,7 @@ const testConfig: Config = {
   timeoutSeconds: 30,
 };
 
-const emptyConfig: Config = { ...testConfig, testCommands: [] };
-
 describe("checkGate", () => {
-  describe("empty test commands (gate skipped)", () => {
-    it("passes every transition when no test commands configured", async () => {
-      const r1 = await checkGate("red", "green", makeRunner(false), emptyConfig);
-      expect(r1.passed).toBe(true);
-      const r2 = await checkGate("red", "green", makeRunner(true), emptyConfig);
-      expect(r2.passed).toBe(true);
-    });
-  });
 
   describe("red → green (tests must fail)", () => {
     it("allows when tests fail", async () => {
