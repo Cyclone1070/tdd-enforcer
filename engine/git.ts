@@ -43,7 +43,7 @@ export function initGit(projectRoot: string): void {
 /** Stage all + commit with --allow-empty so every phase transition has a labeled commit. */
 export function snapshot(projectRoot: string, phase: string): string {
   gitExec("add -A", projectRoot, { stdio: "pipe" as const });
-  gitExec(`commit --allow-empty -m "tdd: ${phase} ${Date.now()}"`, projectRoot, { stdio: "pipe" as const });
+  gitExec(`commit --allow-empty -m "tdd: ${phase}"`, projectRoot, { stdio: "pipe" as const });
   return gitExec("rev-parse HEAD", projectRoot).trim();
 }
 
