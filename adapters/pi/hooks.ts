@@ -105,12 +105,13 @@ export function registerHooks(pi: ExtensionAPI): void {
 
     const existingText = event.content.map((c) => ("text" in c ? c.text : "")).join("");
     return {
+      isError: true,
       content: [
         {
           type: "text",
           text:
             existingText +
-            `\n\n⚠️ ${phase.toUpperCase()}: bash modified locked files: ${violations.join(", ")}\n` +
+            `\n\n⛔ ${phase.toUpperCase()}: bash modified locked files: ${violations.join(", ")}\n` +
             `next_tdd_phase blocked until reverted. ` +
             `Inspect with: cd .pi/tdd && git diff HEAD -- ${violations[0]}`,
         },

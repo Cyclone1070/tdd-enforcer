@@ -1,3 +1,4 @@
+import { join } from "node:path";
 import { Type } from "typebox";
 import { execSync } from "node:child_process";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
@@ -15,7 +16,7 @@ import {
 import type { TestRunner, Phase } from "../../engine/index.js";
 import { getNudgePrompt } from "./prompts.js";
 import { loadTddState } from "./helpers.js";
-
+import { tddLog } from "./log.js";
 
 export function registerTools(pi: ExtensionAPI): void {
   pi.registerTool({

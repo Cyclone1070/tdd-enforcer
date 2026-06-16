@@ -19,8 +19,8 @@ export function tddLog(
 
     // Trim to last MAX_LINES
     const content = readFileSync(logPath, "utf-8");
-    const lines = content.split("\n");
-    if (lines.length > MAX_LINES + 1) {
+    const lines = content.trimEnd().split("\n");
+    if (lines.length > MAX_LINES) {
       const trimmed = lines.slice(-MAX_LINES).join("\n") + "\n";
       writeFileSync(logPath, trimmed, "utf-8");
     }
