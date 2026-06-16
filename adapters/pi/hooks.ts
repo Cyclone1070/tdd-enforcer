@@ -1,19 +1,17 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { isToolCallEventType, isBashToolResult } from "@earendil-works/pi-coding-agent";
-import { ensureReady, loadPhaseState, loadConfig } from "../../engine/index.js";
 import { isAllowed } from "../../engine/enforce.js";
 import { changesSinceSnapshot, restoreFiles } from "../../engine/git.js";
-import type { Phase } from "../../engine/types.js";
-import { buildPhasePrompt } from "./prompts.js";
+import { loadTddState } from "./helpers.js";
 
 export function registerHooks(pi: ExtensionAPI): void {
   pi.on("tool_call", async (event, ctx: ExtensionContext) => {
     const root = ctx.cwd;
-    if (!ensureReady(root)) return;
+    const tdd = loadTddState(root);
+    if (!tdd.ok) return;
 
-    const state = loadPhaseState(root);
-    const phase = state.current as Phase;
-    const config = loadConfig(root);
+    const { state, config } = tdd;
+    const phase = state.current;
 
     // write/edit pre-block
     let filePath: string | undefined;
@@ -35,13 +33,12 @@ export function registerHooks(pi: ExtensionAPI): void {
     if (!isBashToolResult(event)) return;
 
     const root = ctx.cwd;
-    if (!ensureReady(root)) return;
+    const tdd = loadTddState(root);
+    if (!tdd.ok) return;
 
-    const state = loadPhaseState(root);
-    const phase = state.current as Phase;
+    const { state, config } = tdd;
+    const phase = state.current;
     if (phase === "refactor") return;
-
-    const config = loadConfig(root);
 
     const changed = changesSinceSnapshot(root);
     if (changed.length === 0) return;
@@ -59,19 +56,4 @@ export function registerHooks(pi: ExtensionAPI): void {
     };
   });
 
-  pi.on("before_agent_start", async (event, ctx: ExtensionContext) => {
-    const root = ctx.cwd;
-    if (!ensureReady(root)) return;
-
-    const state = loadPhaseState(root);
-    const phase = state.current as Phase;
-    const config = loadConfig(root);
-    const phaseInfo = buildPhasePrompt(phase, config);
-
-    if (!phaseInfo) return;
-
-    return {
-      systemPrompt: event.systemPrompt + "\n\n" + phaseInfo,
-    };
-  });
 }

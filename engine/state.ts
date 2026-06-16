@@ -3,6 +3,7 @@ import { join, dirname } from "node:path";
 import type { PhaseState } from "./types.js";
 
 const TDD_DIR = ".pi/tdd";
+const VALID_PHASES = new Set(["red", "green", "refactor"]);
 
 export function phaseStatePath(projectRoot: string): string {
   return join(projectRoot, TDD_DIR, "phase.json");
@@ -17,21 +18,17 @@ function ensureDir(path: string): void {
 
 export function loadPhaseState(projectRoot: string): PhaseState {
   const path = phaseStatePath(projectRoot);
-  if (!existsSync(path)) {
-    return { enabled: false, current: "red" };
+  const raw = readFileSync(path, "utf-8");
+  const parsed = JSON.parse(raw) as PhaseState;
+
+  if (typeof parsed.current !== "string" || !VALID_PHASES.has(parsed.current)) {
+    throw new Error(`phase.json: invalid phase "${String(parsed.current)}". Must be red, green, or refactor.`);
   }
 
-  try {
-    const raw = readFileSync(path, "utf-8");
-    const parsed = JSON.parse(raw) as PhaseState;
-    // Migrate old format (current: "off") to new format
-    if ((parsed as any).current === "off") {
-      return { enabled: false, current: "red" };
-    }
-    return parsed;
-  } catch {
-    return { enabled: false, current: "red" };
-  }
+  return {
+    enabled: parsed.enabled === true,
+    current: parsed.current,
+  };
 }
 
 export function savePhaseState(projectRoot: string, state: PhaseState): void {

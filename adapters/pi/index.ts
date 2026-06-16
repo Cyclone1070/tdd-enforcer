@@ -1,7 +1,7 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { loadPhaseState, savePhaseState } from "../../engine/index.js";
+import { loadPhaseState, loadConfig, savePhaseState, initGit } from "../../engine/index.js";
 import { registerTools } from "./tools.js";
 import { registerHooks } from "./hooks.js";
 
@@ -11,16 +11,47 @@ export default function (pi: ExtensionAPI) {
     handler: async (_args: string, ctx: ExtensionContext) => {
       const root = ctx.cwd;
       const tddDir = join(root, ".pi", "tdd");
-      const state = loadPhaseState(root);
+
+      if (!existsSync(tddDir)) {
+        ctx.ui.notify("Missing .pi/tdd/ directory. See the tdd-init skill to learn how to set up TDD configs.", "error");
+        return;
+      }
+
+      const rulesPath = join(tddDir, "rules.json");
+      if (!existsSync(rulesPath)) {
+        ctx.ui.notify("Missing .pi/tdd/rules.json. See the tdd-init skill to learn how to set up TDD configs.", "error");
+        return;
+      }
+
+      const phasePath = join(tddDir, "phase.json");
+      if (!existsSync(phasePath)) {
+        ctx.ui.notify("Missing .pi/tdd/phase.json. See the tdd-init skill to learn how to set up TDD configs.", "error");
+        return;
+      }
+
+      let state;
+      try {
+        state = loadPhaseState(root);
+      } catch {
+        ctx.ui.notify("Invalid .pi/tdd/phase.json. Fix or delete it, then run /tdd again.", "error");
+        return;
+      }
+
+      try {
+        loadConfig(root);
+      } catch {
+        ctx.ui.notify("Invalid .pi/tdd/rules.json. Fix or delete it, then run /tdd again.", "error");
+        return;
+      }
 
       if (!state.enabled) {
-        if (!existsSync(tddDir)) {
-          ctx.ui.notify("Run the tdd-init skill first to create .pi/tdd/ with rules.json.", "error");
-          return;
-        }
         if (!existsSync(join(tddDir, ".git", "HEAD"))) {
-          ctx.ui.notify("Run the tdd-init skill first to set up the private git repo.", "error");
-          return;
+          try {
+            initGit(root);
+          } catch {
+            ctx.ui.notify("Failed to initialise private git repo.", "error");
+            return;
+          }
         }
         state.enabled = true;
         savePhaseState(root, state);

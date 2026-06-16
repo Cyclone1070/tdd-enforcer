@@ -2,10 +2,7 @@ import { Type } from "typebox";
 import { execSync } from "node:child_process";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import {
-  ensureReady,
-  loadPhaseState,
   savePhaseState,
-  loadConfig,
   nextPhase,
   checkGate,
   getDisallowedChanges,
@@ -16,6 +13,7 @@ import {
 } from "../../engine/index.js";
 import type { TestRunner, Phase } from "../../engine/index.js";
 import { getNudgePrompt } from "./prompts.js";
+import { loadTddState } from "./helpers.js";
 
 const PREV: Record<string, Phase> = { green: "red", refactor: "green", red: "refactor" };
 
@@ -29,14 +27,13 @@ export function registerTools(pi: ExtensionAPI): void {
     parameters: Type.Object({}),
     async execute(_toolCallId, _params, _signal, _onUpdate, ctx) {
       const root = ctx.cwd;
-      if (!ensureReady(root)) {
-        return { content: [{ type: "text", text: "TDD setup is incomplete. Ensure .pi/tdd/rules.json and .pi/tdd/phase.json are valid." }], details: {} };
+      const tdd = loadTddState(root);
+      if (!tdd.ok) {
+        return { content: [{ type: "text", text: `TDD: ${tdd.reason}` }], details: {} };
       }
 
-      const state = loadPhaseState(root);
-      const config = loadConfig(root);
-
-      const from = state.current as Phase;
+      const { state, config } = tdd;
+      const from = state.current;
       const to = nextPhase(from);
       if (!to) {
         return { content: [{ type: "text", text: `No next phase from ${from}.` }], details: {} };
@@ -110,11 +107,12 @@ export function registerTools(pi: ExtensionAPI): void {
     parameters: Type.Object({}),
     async execute(_toolCallId, _params, _signal, _onUpdate, ctx) {
       const root = ctx.cwd;
-      if (!ensureReady(root)) {
-        return { content: [{ type: "text", text: "TDD setup is incomplete. Ensure .pi/tdd/rules.json and .pi/tdd/phase.json are valid." }], details: {} };
+      const tdd = loadTddState(root);
+      if (!tdd.ok) {
+        return { content: [{ type: "text", text: `TDD: ${tdd.reason}` }], details: {} };
       }
 
-      const state = loadPhaseState(root);
+      const { state } = tdd;
 
       if (!hasParent(root)) {
         return {
@@ -123,7 +121,7 @@ export function registerTools(pi: ExtensionAPI): void {
         };
       }
 
-      const prevPhase = PREV[state.current as string];
+      const prevPhase = PREV[state.current];
       if (!prevPhase) {
         return {
           content: [{ type: "text", text: "Already at RED — no previous phase." }],
