@@ -61,7 +61,7 @@ export function changesSinceSnapshot(projectRoot: string): string[] {
   return [...new Set([...modifiedFiles(projectRoot), ...untrackedFiles(projectRoot)])];
 }
 
-export function restoreFiles(projectRoot: string, files: string[]): void {
+export function restoreFilesTo(projectRoot: string, files: string[], source?: string): void {
   if (files.length === 0) return;
 
   // Separate tracked (git restore) from untracked (delete)
@@ -76,7 +76,8 @@ export function restoreFiles(projectRoot: string, files: string[]): void {
 
   if (trackedFiles.length > 0) {
     const escaped = trackedFiles.map((f) => `"${f}"`).join(" ");
-    gitExec(`restore -- ${escaped}`, projectRoot, { stdio: "pipe" as const });
+    const sourceFlag = source ? `--source=${source} ` : "";
+    gitExec(`restore ${sourceFlag}--worktree -- ${escaped}`, projectRoot, { stdio: "pipe" as const });
   }
 
   for (const f of untrackedFiles) {
@@ -86,6 +87,16 @@ export function restoreFiles(projectRoot: string, files: string[]): void {
       // File may already be gone, ignore
     }
   }
+}
+
+/**
+ * Create a lightweight commit of the current working tree without touching the stash ref.
+ * Returns the commit hash. Used as a pre-bash baseline for per-command diff.
+ */
+export function gitStashCreate(projectRoot: string): string {
+  const hash = gitExec("stash create --include-untracked", projectRoot).trim();
+  if (!hash) throw new Error("git stash create returned empty hash");
+  return hash;
 }
 
 export function headHash(projectRoot: string): string {
@@ -105,6 +116,17 @@ export function hasParent(projectRoot: string): boolean {
   } catch {
     return false;
   }
+}
+
+/**
+ * Get files changed since a specific commit (instead of HEAD).
+ */
+export function changesSince(projectRoot: string, commitHash: string): string[] {
+  const out = gitExec(`diff --name-only ${commitHash} -- .`, projectRoot).trim();
+  const files = out ? out.split("\n") : [];
+  // Also include untracked files
+  const untracked = untrackedFiles(projectRoot);
+  return [...new Set([...files, ...untracked])];
 }
 
 /** Hard reset — discard all uncommitted changes (tracked and untracked), keep HEAD. */

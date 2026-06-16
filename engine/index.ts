@@ -1,5 +1,5 @@
 export { isAllowed, disallowedFiles } from "./enforce.js";
-export { initGit, snapshot, changesSinceSnapshot, modifiedFiles, untrackedFiles, restoreFiles, headHash, headMessage, hasParent, resetHard, undoLastCommit } from "./git.js";
+export { initGit, snapshot, changesSinceSnapshot, changesSince, modifiedFiles, untrackedFiles, restoreFilesTo, gitStashCreate, headHash, headMessage, hasParent, resetHard, undoLastCommit } from "./git.js";
 export { loadConfig } from "./config.js";
 export { loadPhaseState, savePhaseState } from "./state.js";
 export { nextPhase, checkGate, getDisallowedChanges } from "./transition.js";

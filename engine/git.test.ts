@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { mkdirSync, writeFileSync, rmSync, existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { initGit, snapshot, changesSinceSnapshot, modifiedFiles, untrackedFiles, restoreFiles, headHash, headMessage, hasParent, resetHard, undoLastCommit } from "./git.js";
+import { initGit, snapshot, changesSinceSnapshot, modifiedFiles, untrackedFiles, restoreFilesTo, headHash, headMessage, hasParent, resetHard, undoLastCommit } from "./git.js";
 
 let testDir: string;
 
@@ -56,11 +56,11 @@ describe("git operations", () => {
     expect(changes).toContain("another.ts");
   });
 
-  it("restoreFiles reverts specific files", () => {
+  it("restoreFilesTo reverts specific files", () => {
     writeFileSync(join(testDir, "src", "main.ts"), "// to be reverted", "utf-8");
     expect(modifiedFiles(testDir)).toContain("src/main.ts");
 
-    restoreFiles(testDir, ["src/main.ts"]);
+    restoreFilesTo(testDir, ["src/main.ts"]);
     expect(modifiedFiles(testDir)).not.toContain("src/main.ts");
   });
 
@@ -94,9 +94,9 @@ describe("git operations", () => {
     }
   });
 
-  it("restoreFiles does nothing when files list is empty", () => {
+  it("restoreFilesTo does nothing when files list is empty", () => {
     // Should not throw
-    expect(() => restoreFiles(testDir, [])).not.toThrow();
+    expect(() => restoreFilesTo(testDir, [])).not.toThrow();
   });
 });
 
