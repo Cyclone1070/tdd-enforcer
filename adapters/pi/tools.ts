@@ -1,6 +1,9 @@
 import { join } from "node:path";
 import { Type } from "typebox";
-import { execSync } from "node:child_process";
+import { exec } from "node:child_process";
+import { promisify } from "node:util";
+
+const asyncExec = promisify(exec);
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import {
   savePhaseState,
@@ -67,7 +70,7 @@ export function registerTools(pi: ExtensionAPI): void {
         const results = await Promise.all(
           commands.map(async (cmd) => {
             try {
-              execSync(cmd, { cwd: root, stdio: "pipe", timeout: timeout * 1000 });
+              await asyncExec(cmd, { cwd: root, timeout: timeout * 1000 });
               return { command: cmd, passed: true };
             } catch {
               return { command: cmd, passed: false };
