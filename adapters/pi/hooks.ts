@@ -1,4 +1,4 @@
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { isToolCallEventType, isBashToolResult } from "@earendil-works/pi-coding-agent";
 import { isAllowed } from "../../engine/enforce.js";
@@ -44,22 +44,24 @@ export function registerHooks(pi: ExtensionAPI): void {
       return;
     }
 
-    const allowed = isAllowed(filePath, phase, config);
-    tddLog(tddDir, "DEBUG", "tool_call: check", { toolName, filePath, phase, allowed });
+    // Patterns in rules.json are relative to repo root; convert absolute path
+    const relPath = relative(root, filePath);
+    const allowed = isAllowed(relPath, phase, config);
+    tddLog(tddDir, "DEBUG", "tool_call: check", { toolName, relPath, phase, allowed });
 
     if (!allowed) {
       tddLog(tddDir, "INFO", "tool_call: blocked file modification", {
         toolName,
-        filePath,
+        relPath,
         phase,
       });
       return {
         block: true,
-        reason: `TDD ${phase.toUpperCase()}: "${filePath}" is locked in this phase.`,
+        reason: `TDD ${phase.toUpperCase()}: "${relPath}" is locked in this phase.`,
       };
     }
 
-    tddLog(tddDir, "DEBUG", "tool_call: allowed", { toolName, filePath, phase });
+    tddLog(tddDir, "DEBUG", "tool_call: allowed", { toolName, relPath, phase });
   });
 
   pi.on("tool_result", async (event, ctx: ExtensionContext) => {

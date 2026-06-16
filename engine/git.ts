@@ -1,5 +1,5 @@
 import { execSync, type ExecSyncOptions } from "node:child_process";
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 
 const TDD_DIR = ".pi/tdd";
@@ -63,8 +63,29 @@ export function changesSinceSnapshot(projectRoot: string): string[] {
 
 export function restoreFiles(projectRoot: string, files: string[]): void {
   if (files.length === 0) return;
-  const escaped = files.map((f) => `"${f}"`).join(" ");
-  gitExec(`restore -- ${escaped}`, projectRoot, { stdio: "pipe" as const });
+
+  // Separate tracked (git restore) from untracked (delete)
+  const tracked = gitExec("ls-files", projectRoot)
+    .trim()
+    .split("\n")
+    .filter(Boolean);
+  const trackedSet = new Set(tracked);
+
+  const trackedFiles = files.filter((f) => trackedSet.has(f));
+  const untrackedFiles = files.filter((f) => !trackedSet.has(f));
+
+  if (trackedFiles.length > 0) {
+    const escaped = trackedFiles.map((f) => `"${f}"`).join(" ");
+    gitExec(`restore -- ${escaped}`, projectRoot, { stdio: "pipe" as const });
+  }
+
+  for (const f of untrackedFiles) {
+    try {
+      unlinkSync(f);
+    } catch {
+      // File may already be gone, ignore
+    }
+  }
 }
 
 export function headHash(projectRoot: string): string {
