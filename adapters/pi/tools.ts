@@ -10,12 +10,12 @@ import {
   hasParent,
   resetHard,
   undoLastCommit,
+  headMessage,
 } from "../../engine/index.js";
 import type { TestRunner, Phase } from "../../engine/index.js";
 import { getNudgePrompt } from "./prompts.js";
 import { loadTddState } from "./helpers.js";
 
-const PREV: Record<string, Phase> = { green: "red", refactor: "green", red: "refactor" };
 
 export function registerTools(pi: ExtensionAPI): void {
   pi.registerTool({
@@ -84,8 +84,8 @@ export function registerTools(pi: ExtensionAPI): void {
         return { content: [{ type: "text", text: gate.message }], details: {} };
       }
 
-      // 3. Snapshot
-      snapshot(root, to);
+      // 3. Snapshot — label with the phase the work was done in
+      snapshot(root, from);
 
       // 4. Save state
       state.current = to;
@@ -121,13 +121,25 @@ export function registerTools(pi: ExtensionAPI): void {
         };
       }
 
-      const prevPhase = PREV[state.current];
-      if (!prevPhase) {
+      // Read phase from HEAD snapshot commit message (source of truth).
+      // Snapshot is labeled with the phase the work was done in, so we use
+      // it directly — no hardcoded phase map needed.
+      const headMsg = headMessage(root);
+      const phaseMatch = headMsg.match(/^tdd: (red|green|refactor)/);
+      if (!phaseMatch) {
         return {
-          content: [{ type: "text", text: "Already at RED — no previous phase." }],
+          content: [
+            {
+              type: "text",
+              text: `HEAD commit "${headMsg}" is not a TDD snapshot. Cannot determine previous phase.\n` +
+                    `The private git repo at .pi/tdd must not be manually modified. ` +
+                    `Tampering with it will cause TDD state corruption.`,
+            },
+          ],
           details: {},
         };
       }
+      const prevPhase = phaseMatch[1] as Phase;
 
       // 1. Nuke any uncommitted changes, WT matches HEAD
       resetHard(root);
@@ -135,7 +147,7 @@ export function registerTools(pi: ExtensionAPI): void {
       // 2. Pop last snapshot commit, keep its content as unstaged
       undoLastCommit(root);
 
-      // 3. Update phase label
+      // 3. Update phase label from the snapshot's own label
       state.current = prevPhase;
       savePhaseState(root, state);
 

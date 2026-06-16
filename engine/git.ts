@@ -71,6 +71,11 @@ export function headHash(projectRoot: string): string {
   return gitExec("rev-parse HEAD", projectRoot).trim();
 }
 
+/** Get the commit message of HEAD. */
+export function headMessage(projectRoot: string): string {
+  return gitExec("log -1 --format=%s HEAD", projectRoot).trim();
+}
+
 /** Check if HEAD has a parent commit (i.e. can go back one). */
 export function hasParent(projectRoot: string): boolean {
   try {
