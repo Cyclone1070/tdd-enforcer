@@ -44,7 +44,7 @@ describe("loadTddState", () => {
     });
   });
 
-  it("returns missing state.json when rules exists but state missing", () => {
+  it("auto-creates state.json when missing (default RED disabled)", () => {
     withTempDir((dir) => {
       mkdirSync(join(dir, ".pi", "tdd"), { recursive: true });
       writeFileSync(
@@ -53,12 +53,15 @@ describe("loadTddState", () => {
         "utf-8",
       );
       const result = loadTddState(dir);
-      expect(result.ok).toBe(false);
-      expect(result.reason).toContain("state.json");
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.state.enabled).toBe(false);
+        expect(result.state.current).toBe("red");
+      }
     });
   });
 
-  it("returns invalid state.json error for malformed JSON", () => {
+  it("auto-creates state.json when corrupted (recovers to default)", () => {
     withTempDir((dir) => {
       mkdirSync(join(dir, ".pi", "tdd"), { recursive: true });
       writeFileSync(
@@ -68,8 +71,11 @@ describe("loadTddState", () => {
       );
       writeFileSync(join(dir, ".pi", "tdd", "state.json"), "not json", "utf-8");
       const result = loadTddState(dir);
-      expect(result.ok).toBe(false);
-      expect(result.reason).toContain("Invalid .pi/tdd/state.json");
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.state.enabled).toBe(false);
+        expect(result.state.current).toBe("red");
+      }
     });
   });
 
@@ -92,7 +98,7 @@ describe("loadTddState", () => {
     });
   });
 
-  it("returns disabled error when state.json has enabled: false", () => {
+  it("returns ok when state.json has enabled: false (callers check enabled)", () => {
     withTempDir((dir) => {
       mkdirSync(join(dir, ".pi", "tdd"), { recursive: true });
       writeFileSync(
@@ -106,8 +112,11 @@ describe("loadTddState", () => {
         "utf-8",
       );
       const result = loadTddState(dir);
-      expect(result.ok).toBe(false);
-      expect(result.reason).toContain("TDD is not enabled");
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.state.enabled).toBe(false);
+        expect(result.state.current).toBe("red");
+      }
     });
   });
 
@@ -135,7 +144,7 @@ describe("loadTddState", () => {
     });
   });
 
-  it("heals missing git repo automatically", () => {
+  it("auto-creates git repo when missing", () => {
     withTempDir((dir) => {
       mkdirSync(join(dir, ".pi", "tdd"), { recursive: true });
       writeFileSync(
@@ -155,12 +164,12 @@ describe("loadTddState", () => {
       const result = loadTddState(dir);
       expect(result.ok).toBe(true);
 
-      // Git should now exist
+      // Git should now exist — loadTddState heals it
       expect(existsSync(gitDir)).toBe(true);
     });
   });
 
-  it("handles multiple calls without error (existing git is reused)", () => {
+  it("handles multiple calls without error", () => {
     withTempDir((dir) => {
       mkdirSync(join(dir, ".pi", "tdd"), { recursive: true });
       writeFileSync(
@@ -182,7 +191,7 @@ describe("loadTddState", () => {
     });
   });
 
-  it("passes through the state.json validation error for invalid current phase", () => {
+  it("recovers from invalid current phase in state.json (auto-creates default)", () => {
     withTempDir((dir) => {
       mkdirSync(join(dir, ".pi", "tdd"), { recursive: true });
       writeFileSync(
@@ -196,8 +205,11 @@ describe("loadTddState", () => {
         "utf-8",
       );
       const result = loadTddState(dir);
-      expect(result.ok).toBe(false);
-      expect(result.reason).toContain("Invalid .pi/tdd/state.json");
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.state.enabled).toBe(false);
+        expect(result.state.current).toBe("red");
+      }
     });
   });
 });

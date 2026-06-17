@@ -37,6 +37,10 @@ export function registerTools(pi: ExtensionAPI): void {
         tddLog(tddDir, "WARN", "next_tdd_phase: TDD not active", { reason: tdd.reason });
         return { content: [{ type: "text", text: `TDD: ${tdd.reason}` }], details: {} };
       }
+      if (!tdd.state.enabled) {
+        tddLog(tddDir, "WARN", "next_tdd_phase: TDD disabled");
+        return { content: [{ type: "text", text: "TDD is not enabled. Run /tdd:on to enable it." }], details: {} };
+      }
 
       const { state, config } = tdd;
       const from = state.current;
@@ -124,8 +128,9 @@ export function registerTools(pi: ExtensionAPI): void {
     name: "previous_tdd_phase",
     label: "Previous TDD Phase",
     description:
-      "WARNING: Destroys ALL uncommitted changes and pops the last snapshot commit. " +
-      "Working tree keeps the popped commit's content as unstaged changes.",
+      "WARNING: Discards ALL changes made in the current phase and reverts the working tree " +
+      "to what it was when the last phase ended. Use when the previous phase's work was wrong " +
+      "and this phase cannot proceed.",
     parameters: Type.Object({}),
     async execute(_toolCallId, _params, _signal, _onUpdate, ctx) {
       const root = ctx.cwd;
@@ -136,6 +141,10 @@ export function registerTools(pi: ExtensionAPI): void {
           reason: tdd.reason,
         });
         return { content: [{ type: "text", text: `TDD: ${tdd.reason}` }], details: {} };
+      }
+      if (!tdd.state.enabled) {
+        tddLog(tddDir, "WARN", "previous_tdd_phase: TDD disabled");
+        return { content: [{ type: "text", text: "TDD is not enabled. Run /tdd:on to enable it." }], details: {} };
       }
 
       const { state } = tdd;
@@ -222,6 +231,10 @@ export function registerTools(pi: ExtensionAPI): void {
           reason: result.reason,
         });
         return { content: [{ type: "text", text: `TDD: ${result.reason}` }], details: {} };
+      }
+      if (!result.state.enabled) {
+        tddLog(tddDir, "WARN", "tdd_status: TDD disabled");
+        return { content: [{ type: "text", text: "TDD is not enabled. Run /tdd:on to enable it." }], details: {} };
       }
 
       const { state, config } = result;

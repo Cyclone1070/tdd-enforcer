@@ -1,0 +1,146 @@
+# TDD Enforcer — Behaviour Spec
+
+## Entry Gate (all surfaces)
+
+Every surface (commands, hooks, tools) hits this first:
+
+```
+1. .pi/tdd/ exists?
+   NO  ──► error: "Missing .pi/tdd/. See the tdd-enforcer skill."
+
+2. rules.json exists and parses?
+   NO  ──► error: "Missing/invalid rules.json. See the tdd-enforcer skill."
+
+3. state.json exists and parses?
+   YES ──► use it
+   NO  ──► auto-create from git HEAD commit message.
+            If no git repo: create { enabled: false, current: "red" }.
+```
+
+After this gate, every surface has `state` + `config`. Then branches on `state.enabled`.
+
+---
+
+## Commands (user only)
+
+| Command | Gate check | After gate |
+|---------|-----------|------------|
+| `tdd:on` | Setup valid? | If `enabled` → error "already on". Init git (if missing), snapshot, set `enabled: true`. |
+| `tdd:off` | Setup valid? | If `disabled` → error "already off". Set `enabled: false`. |
+| `tdd:status` | Setup valid? | Show state + config regardless of `enabled`. |
+| `tdd:reset` | Setup valid? | Nuke private git, re-init, snapshot, set `enabled: false`. |
+| `tdd:red` / `tdd:green` / `tdd:refactor` | Setup valid? | If `disabled` → error "not enabled". Set `current` to target phase. |
+
+All errors reference the tdd-enforcer skill.
+
+---
+
+## Hooks (agent — automatic)
+
+| Hook | Gate + enabled | Behaviour |
+|------|---------------|-----------|
+| `tool_call` (write/edit) | Setup broken → pass through. Disabled → pass through. **Enabled** → block if `relPath` starts with `.pi/tdd/` OR phase-locked. | |
+| `tool_result` (bash) | Setup broken → pass through. Disabled → pass through. **Enabled** → revert if path starts with `.pi/tdd/` OR phase-locked. RETOOL revert paths to `.pi/tdd/` prefix check. | |
+
+---
+
+## Tools (agent — callable)
+
+| Tool | Gate + enabled | Behaviour |
+|------|---------------|-----------|
+| `next_tdd_phase` | Disabled → error. Enabled → run gate + snapshot + transition. | |
+| `previous_tdd_phase` | Disabled → error. Enabled → revert to previous snapshot. | |
+| `tdd_status` | Disabled → error. Enabled → show state + config. | |
+
+---
+
+## Flow Diagrams
+
+### Initial Setup Flow
+
+```
+User creates .pi/tdd/rules.json
+       │
+       ▼
+User runs /tdd:on
+       │
+       ▼
+Gate: .pi/tdd/ exists? ──NO──► error (agent creates it)
+       │
+      YES
+       │
+       ▼
+Gate: rules.json exists? ──NO──► error (agent creates it)
+       │
+      YES
+       │
+       ▼
+Gate: rules.json valid? ──NO──► error (agent fixes it)
+       │
+      YES
+       │
+       ▼
+Gate: state.json exists? ──NO──► auto-create
+       │
+      YES/auto-created
+       │
+       ▼
+Init git (if missing) ──► snapshot ──► enabled: true
+       │
+       ▼
+TDD active — RED phase, enforcement on
+```
+
+### Phase Cycle Flow
+
+```
+RED: write tests
+  │  tests fail? ──NO──► "Tests passed. Add a failing test before transitioning."
+  │ YES
+  ├─► next_tdd_phase ──► GREEN
+  │
+GREEN: implement features
+  │  tests pass? ──NO──► "Tests failed. Fix them before transitioning."
+  │ YES
+  ├─► next_tdd_phase ──► REFACTOR
+  │
+REFACTOR: refactor freely
+  │  tests pass? ──NO──► "Tests failed. Fix them before transitioning."
+  │ YES
+  ├─► next_tdd_phase ──► RED (new cycle)
+```
+
+### Bash Enforcement Flow
+
+```
+Agent runs bash command
+       │
+       ▼
+tool_call hook: stash pre-command state
+       │
+       ▼
+Bash executes (modifies files)
+       │
+       ▼
+tool_result hook: diff against stash
+       │
+       ▼
+For each changed file:
+  ├── path starts with ".pi/tdd/"? ──YES──► revert, flag as violation
+  ├── locked in current phase? ──YES──► revert, flag as violation
+  └── no violations ──► keep changes
+       │
+       ▼
+Return warning listing reverted vs retained files
+```
+
+---
+
+## Protection Summary
+
+| Surface | `.pi/tdd/` locked? | Phase-locked files? |
+|---------|-------------------|-------------------|
+| write/edit (TDD enabled) | ✅ Block | ✅ Block |
+| write/edit (TDD disabled) | ❌ Free | ❌ Free |
+| bash (TDD enabled) | ✅ Reverted | ✅ Reverted |
+| bash (TDD disabled) | ❌ Free | ❌ Free |

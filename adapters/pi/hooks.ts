@@ -67,6 +67,16 @@ export function registerHooks(pi: ExtensionAPI): void {
 
     // Patterns in rules.json are relative to repo root; convert absolute path
     const relPath = relative(root, filePath);
+
+    // Never allow writes to .pi/tdd/ when TDD is active
+    if (relPath.startsWith(".pi/tdd/")) {
+      tddLog(tddDir, "INFO", "tool_call: blocked .pi/tdd/ file", { toolName, relPath });
+      return {
+        block: true,
+        reason: "TDD: Config files are locked. No bypassing TDD allowed. If bypassing is justified, ask the user: turn TDD off (/tdd:off), reset (/tdd:reset), or change phase via /tdd commands.",
+      };
+    }
+
     const allowed = isAllowed(relPath, phase, config);
     tddLog(tddDir, "DEBUG", "tool_call: check", { toolName, relPath, phase, allowed });
 
@@ -111,10 +121,6 @@ export function registerHooks(pi: ExtensionAPI): void {
 
     const { state, config } = tdd;
     const phase = state.current;
-    if (phase === "refactor") {
-      tddLog(tddDir, "DEBUG", "tool_result: refactor phase, no check");
-      return;
-    }
 
     // Diff against pre-bash stash — only changes from THIS command
     const changed = changesSince(root, stashHash);
@@ -124,7 +130,22 @@ export function registerHooks(pi: ExtensionAPI): void {
       return;
     }
 
-    const cmdViolations = changed.filter((f) => !isAllowed(f, phase, config));
+    // Config files (.pi/tdd/) are always violations when TDD is active
+    const tddViolations = changed.filter((f) => f.startsWith(".pi/tdd/"));
+
+    if (phase === "refactor") {
+      // In refactor, only .pi/tdd/ files are violations
+      if (tddViolations.length === 0) {
+        tddLog(tddDir, "DEBUG", "tool_result: refactor phase, no TDD dir violations");
+        return;
+      }
+    }
+
+    const phaseViolations =
+      phase === "refactor" ? [] : changed.filter((f) => !isAllowed(f, phase, config));
+
+    const cmdViolations = [...new Set([...tddViolations, ...phaseViolations])];
+
     if (cmdViolations.length === 0) {
       tddLog(tddDir, "DEBUG", "tool_result: no violations among changed files", {
         changed,
@@ -140,8 +161,10 @@ export function registerHooks(pi: ExtensionAPI): void {
     // Revert only this command's violations back to pre-bash state
     restoreFilesTo(root, cmdViolations, stashHash);
 
-    // Find remaining allowed changes from this command
-    const cmdAllowed = changed.filter((f) => isAllowed(f, phase, config));
+    // Find remaining allowed changes from this command (exclude .pi/tdd/)
+    const cmdAllowed = changed.filter(
+      (f) => isAllowed(f, phase, config) && !f.startsWith(".pi/tdd/"),
+    );
 
     const existingText = event.content.map((c) => ("text" in c ? c.text : "")).join("");
     let warning = `\n\n⛔ ${phase.toUpperCase()}: reverted locked files modified by bash:`;

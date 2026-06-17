@@ -1,7 +1,7 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { loadPhaseState, loadConfig, savePhaseState, initGit, resetGit, snapshot } from "../../engine/index.js";
+import { savePhaseState, resetGit, snapshot } from "../../engine/index.js";
 import { registerTools } from "./tools.js";
 import { registerHooks } from "./hooks.js";
 import { loadTddState } from "./helpers.js";
@@ -16,46 +16,14 @@ export default function (pi: ExtensionAPI) {
 
       tddLog(tddDir, "INFO", "tdd:on: starting");
 
-      if (!existsSync(tddDir)) {
-        tddLog(tddDir, "WARN", "tdd:on: missing .pi/tdd/ directory");
-        ctx.ui.notify("Missing .pi/tdd/ directory. See the tdd-init skill to learn how to set up TDD configs.", "error");
+      const setup = loadTddState(root);
+      if (!setup.ok) {
+        tddLog(tddDir, "WARN", "tdd:on: setup invalid", { reason: setup.reason });
+        ctx.ui.notify(setup.reason, "error");
         return;
       }
 
-      const rulesPath = join(tddDir, "rules.json");
-      if (!existsSync(rulesPath)) {
-        tddLog(tddDir, "WARN", "tdd:on: missing rules.json");
-        ctx.ui.notify("Missing .pi/tdd/rules.json. See the tdd-init skill to learn how to set up TDD configs.", "error");
-        return;
-      }
-
-      const phasePath = join(tddDir, "state.json");
-      if (!existsSync(phasePath)) {
-        tddLog(tddDir, "WARN", "tdd:on: missing state.json");
-        ctx.ui.notify("Missing .pi/tdd/state.json. See the tdd-init skill to learn how to set up TDD configs.", "error");
-        return;
-      }
-
-      let state;
-      try {
-        state = loadPhaseState(root);
-      } catch (e) {
-        tddLog(tddDir, "WARN", "tdd:on: invalid state.json", {
-          error: (e as Error).message,
-        });
-        ctx.ui.notify("Invalid .pi/tdd/state.json. Fix or delete it, then run /tdd:on again.", "error");
-        return;
-      }
-
-      try {
-        loadConfig(root);
-      } catch (e) {
-        tddLog(tddDir, "WARN", "tdd:on: invalid rules.json", {
-          error: (e as Error).message,
-        });
-        ctx.ui.notify("Invalid .pi/tdd/rules.json. Fix or delete it, then run /tdd:on again.", "error");
-        return;
-      }
+      const { state } = setup;
 
       if (state.enabled) {
         tddLog(tddDir, "INFO", "tdd:on: already enabled", {
@@ -63,21 +31,6 @@ export default function (pi: ExtensionAPI) {
         });
         ctx.ui.notify(`TDD already enabled — ${state.current.toUpperCase()} phase`, "info");
         return;
-      }
-
-      if (!existsSync(join(tddDir, ".git", "HEAD"))) {
-        try {
-          initGit(root);
-          tddLog(tddDir, "INFO", "tdd:on: git initialised");
-        } catch (e) {
-          tddLog(tddDir, "ERROR", "tdd:on: git init failed", {
-            error: (e as Error).message,
-          });
-          ctx.ui.notify("Failed to initialise private git repo.", "error");
-          return;
-        }
-      } else {
-        tddLog(tddDir, "DEBUG", "tdd:on: git repo already exists");
       }
 
       // Snapshot working tree so stale baseline doesn't nuke user changes
@@ -101,16 +54,14 @@ export default function (pi: ExtensionAPI) {
       const root = ctx.cwd;
       const tddDir = join(root, ".pi", "tdd");
 
-      let state;
-      try {
-        state = loadPhaseState(root);
-      } catch (e) {
-        tddLog(tddDir, "WARN", "tdd:off: invalid state.json", {
-          error: (e as Error).message,
-        });
-        ctx.ui.notify("Invalid .pi/tdd/state.json. Fix or delete it, then run /tdd:off again.", "error");
+      const setup = loadTddState(root);
+      if (!setup.ok) {
+        tddLog(tddDir, "WARN", "tdd:off: setup invalid", { reason: setup.reason });
+        ctx.ui.notify(setup.reason, "error");
         return;
       }
+
+      const { state } = setup;
 
       if (!state.enabled) {
         tddLog(tddDir, "INFO", "tdd:off: already disabled");
@@ -135,7 +86,7 @@ export default function (pi: ExtensionAPI) {
       const result = loadTddState(root);
 
       if (!result.ok) {
-        tddLog(tddDir, "WARN", "tdd:status: TDD not active", {
+        tddLog(tddDir, "WARN", "tdd:status: setup invalid", {
           reason: result.reason,
         });
         ctx.ui.notify(`TDD: ${result.reason}`, "error");
@@ -143,17 +94,19 @@ export default function (pi: ExtensionAPI) {
       }
 
       const { state, config } = result;
+      const enabledStr = state.enabled ? "enabled" : "disabled";
       const phaseStr = state.current.toUpperCase();
       const redGlobs = config.allowedRedPhaseFiles.join(", ") || "(none)";
       const greenGlobs = config.allowedGreenPhaseFiles.join(", ") || "(none)";
       const commands = config.testCommands.join(", ") || "(none)";
 
       tddLog(tddDir, "INFO", "tdd:status: queried", {
+        enabled: state.enabled,
         phase: state.current,
       });
 
       ctx.ui.notify(
-        `TDD enforcer enabled\n` +
+        `TDD enforcer ${enabledStr}\n` +
         `Current phase: ${phaseStr}\n` +
         `Test files: ${redGlobs}\n` +
         `Impl files: ${greenGlobs}\n` +
@@ -173,9 +126,10 @@ export default function (pi: ExtensionAPI) {
 
       tddLog(tddDir, "INFO", "tdd:reset: starting");
 
-      if (!existsSync(tddDir)) {
-        tddLog(tddDir, "WARN", "tdd:reset: missing .pi/tdd/ directory");
-        ctx.ui.notify("No .pi/tdd/ directory found — nothing to reset.", "error");
+      const setup = loadTddState(root);
+      if (!setup.ok) {
+        tddLog(tddDir, "WARN", "tdd:reset: setup invalid", { reason: setup.reason });
+        ctx.ui.notify(setup.reason, "error");
         return;
       }
 
