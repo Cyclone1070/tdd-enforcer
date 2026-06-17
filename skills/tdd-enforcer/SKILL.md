@@ -1,3 +1,8 @@
+---
+name: tdd-enforcer
+description: Use when working within TDD enforcer extension — understand phase rules, file locks, agent tools vs user commands, and when to call next/previous phase or ask the user for help.
+---
+
 # TDD Enforcer Skill
 
 This extension enforces the **Red-Green-Refactor** cycle of TDD.
