@@ -1,6 +1,6 @@
 {
   "name": "tdd-enforcer",
-  "version": "0.1.9",
+  "version": "0.2.0",
   "type": "module",
   "keywords": [
     "pi-package"
@@ -14,6 +14,9 @@
   "pi": {
     "extensions": [
       "./adapters/pi/index.ts"
+    ],
+    "skills": [
+      "./skills"
     ]
   }
 }
