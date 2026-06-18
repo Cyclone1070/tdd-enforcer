@@ -10,6 +10,7 @@
   },
   "devDependencies": {
     "@earendil-works/pi-coding-agent": "^0.79.6",
+    "@types/node": "^25.9.3",
     "typebox": "^1.2.16",
     "vitest": "^3"
   },
