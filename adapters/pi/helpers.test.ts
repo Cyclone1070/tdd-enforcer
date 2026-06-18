@@ -21,6 +21,7 @@ describe("loadTddState", () => {
   let mockSavePhaseState: ReturnType<typeof vi.fn>;
   let mockHeadMessage: ReturnType<typeof vi.fn>;
   let mockNextPhase: ReturnType<typeof vi.fn>;
+  let mockStageFiles: ReturnType<typeof vi.fn>;
 
   // Shared helper to simulate nextPhase behavior
   const realNextPhase = (p: string) =>
@@ -41,6 +42,7 @@ describe("loadTddState", () => {
       savePhaseState: mockSavePhaseState,
       headMessage: mockHeadMessage,
       nextPhase: mockNextPhase,
+      stageFiles: mockStageFiles,
       ...overrides,
     };
   }
@@ -60,6 +62,7 @@ describe("loadTddState", () => {
     mockSavePhaseState = vi.fn();
     mockHeadMessage = vi.fn().mockReturnValue("tdd: red");
     mockNextPhase = vi.fn().mockImplementation(realNextPhase);
+    mockStageFiles = vi.fn();
   });
 
   it("returns missing dir error when .pi/tdd does not exist", () => {
@@ -228,5 +231,43 @@ describe("loadTddState", () => {
       expect(result.state.enabled).toBe(true);
       expect(result.state.current).toBe("red");
     }
+  });
+
+  it("force-adds state.json after creating it from recovery", () => {
+    mockExistsSync.mockImplementation((path: string) => {
+      if (path.includes("state.json")) return false; // missing → triggers create
+      if (path.includes(".git")) return false;
+      return true;
+    });
+    mockHeadMessage.mockReturnValue("tdd: init");
+    const result = loadTddState("/test", makeDeps());
+    expect(result.ok).toBe(true);
+    expect(mockStageFiles).toHaveBeenCalledWith("/test", [".pi/tdd/state.json"]);
+  });
+
+  it("does not force-add state.json when it already exists and is valid", () => {
+    mockExistsSync.mockImplementation((path: string) => {
+      if (path.includes("state.json")) return true;
+      if (path.includes(".git")) return true;
+      return true;
+    });
+    const result = loadTddState("/test", makeDeps());
+    expect(result.ok).toBe(true);
+    expect(mockStageFiles).not.toHaveBeenCalled();
+  });
+
+  it("force-adds state.json after recovering from corrupted state", () => {
+    mockExistsSync.mockImplementation((path: string) => {
+      if (path.includes("state.json")) return true; // exists but corrupted
+      if (path.includes(".git")) return true;
+      return true;
+    });
+    mockLoadPhaseState.mockImplementation(() => {
+      throw new Error("corrupt");
+    });
+    mockHeadMessage.mockReturnValue("tdd: init");
+    const result = loadTddState("/test", makeDeps());
+    expect(result.ok).toBe(true);
+    expect(mockStageFiles).toHaveBeenCalledWith("/test", [".pi/tdd/state.json"]);
   });
 });

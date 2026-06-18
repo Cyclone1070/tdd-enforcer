@@ -55,6 +55,7 @@ export function initGit(projectRoot: string, deps: GitDeps = defaultDeps): void 
   }
 
   gitExec("add -A", projectRoot, deps, { stdio: "pipe" as const });
+  gitExec("add -f .pi/tdd/", projectRoot, deps, { stdio: "pipe" as const });
   gitExec('commit --allow-empty -m "tdd: init"', projectRoot, deps, { stdio: "pipe" as const });
 }
 
@@ -71,6 +72,7 @@ export function resetGit(projectRoot: string, deps: GitDeps = defaultDeps): void
 /** Stage all + commit with --allow-empty so every phase transition has a labeled commit. */
 export function snapshot(projectRoot: string, phase: string, deps: GitDeps = defaultDeps): string {
   gitExec("add -A", projectRoot, deps, { stdio: "pipe" as const });
+  gitExec("add -f .pi/tdd/", projectRoot, deps, { stdio: "pipe" as const });
   gitExec(`commit --allow-empty -m "tdd: ${phase}"`, projectRoot, deps, { stdio: "pipe" as const });
   return gitExec("rev-parse HEAD", projectRoot, deps).trim();
 }
@@ -115,6 +117,16 @@ export function restoreFilesTo(projectRoot: string, files: string[], source?: st
       // File may already be gone, ignore
     }
   }
+}
+
+/**
+ * Force-stage files in the private git repo, bypassing worktree .gitignore.
+ * Does not commit — call snapshot() or commit separately to persist.
+ */
+export function stageFiles(projectRoot: string, files: string[], deps: GitDeps = defaultDeps): void {
+  if (files.length === 0) return;
+  const escaped = files.map((f) => `"${f}"`).join(" ");
+  gitExec(`add -f ${escaped}`, projectRoot, deps, { stdio: "pipe" as const });
 }
 
 /**

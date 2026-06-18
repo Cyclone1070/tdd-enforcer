@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { loadPhaseState, savePhaseState, loadConfig, headMessage, nextPhase, initGit } from "../../engine/index.js";
+import { loadPhaseState, savePhaseState, loadConfig, headMessage, nextPhase, initGit, stageFiles } from "../../engine/index.js";
 import type { PhaseState, Config, Phase } from "../../engine/types.js";
 
 export type TddLoadResult =
@@ -61,6 +61,7 @@ export function loadTddState(
     savePhaseState: typeof savePhaseState;
     headMessage: typeof headMessage;
     nextPhase: typeof nextPhase;
+    stageFiles: typeof stageFiles;
   } = {
     existsSync,
     loadConfig,
@@ -69,6 +70,7 @@ export function loadTddState(
     savePhaseState,
     headMessage,
     nextPhase,
+    stageFiles,
   },
 ): TddLoadResult {
   const tddDir = join(root, ".pi", "tdd");
@@ -111,6 +113,7 @@ export function loadTddState(
   if (!state) {
     state = recoverState(root, tddDir, { existsSync: deps.existsSync, headMessage: deps.headMessage, nextPhase: deps.nextPhase });
     deps.savePhaseState(root, state);
+    deps.stageFiles(root, [".pi/tdd/state.json"]);
   }
 
   return { ok: true, state, config };

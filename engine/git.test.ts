@@ -12,6 +12,7 @@ import {
   resetHard,
   undoLastCommit,
   gitStashCreate,
+  stageFiles,
 } from "./git.js";
 import type { GitDeps } from "./git.js";
 
@@ -53,6 +54,11 @@ describe("git operations", () => {
     );
     expect(deps.mkdirSync).toHaveBeenCalled();
     expect(deps.writeFileSync).toHaveBeenCalled();
+    // Every git command targets the private repo, not the main project .git
+    for (const call of (deps.execSync as any).mock.calls) {
+      expect(call[1].env.GIT_DIR).toBe("/test/.pi/tdd/.git");
+      expect(call[1].env.GIT_WORK_TREE).toBe("/test");
+    }
   });
 
   it("has initial commit after init", () => {
@@ -123,6 +129,52 @@ describe("git operations", () => {
   it("restoreFilesTo does nothing when files list is empty", () => {
     expect(() => restoreFilesTo("/test", [], undefined, deps)).not.toThrow();
     expect(deps.execSync).not.toHaveBeenCalled();
+  });
+
+  it("initGit force-adds .pi/tdd/ to bypass worktree gitignore", () => {
+    initGit("/test", deps);
+    const call = (deps.execSync as any).mock.calls.find(
+      (c: any[]) => c[0].includes("git add -f .pi/tdd/"),
+    );
+    expect(call).toBeDefined();
+    // Verifies isolation: all git commands target the private repo, not the main project .git
+    const env = call[1].env;
+    expect(env.GIT_DIR).toBe("/test/.pi/tdd/.git");
+    expect(env.GIT_WORK_TREE).toBe("/test");
+  });
+
+  it("initGit force-adds after add -A and before commit", () => {
+    initGit("/test", deps);
+    const calls = (deps.execSync as any).mock.calls.map((c: any[]) => c[0]);
+    const addAIndex = calls.findIndex((c: string) => c.includes("git add -A "));
+    const forceAddIndex = calls.findIndex((c: string) => c.includes("git add -f"));
+    const commitIndex = calls.findIndex((c: string) => c.includes("git commit"));
+    expect(addAIndex).toBeLessThan(forceAddIndex);
+    expect(forceAddIndex).toBeLessThan(commitIndex);
+  });
+
+  it("snapshot force-adds .pi/tdd/ to bypass worktree gitignore", () => {
+    outputs["rev-parse HEAD"] = "hash123\n";
+    snapshot("/test", "green", deps);
+    const call = (deps.execSync as any).mock.calls.find(
+      (c: any[]) => c[0].includes("git add -f .pi/tdd/"),
+    );
+    expect(call).toBeDefined();
+    // Verifies isolation: all git commands target the private repo, not the main project .git
+    const env = call[1].env;
+    expect(env.GIT_DIR).toBe("/test/.pi/tdd/.git");
+    expect(env.GIT_WORK_TREE).toBe("/test");
+  });
+
+  it("snapshot force-adds after add -A and before commit", () => {
+    outputs["rev-parse HEAD"] = "hash456\n";
+    snapshot("/test", "red", deps);
+    const calls = (deps.execSync as any).mock.calls.map((c: any[]) => c[0]);
+    const addAIndex = calls.findIndex((c: string) => c.includes("git add -A "));
+    const forceAddIndex = calls.findIndex((c: string) => c.includes("git add -f"));
+    const commitIndex = calls.findIndex((c: string) => c.includes("git commit"));
+    expect(addAIndex).toBeLessThan(forceAddIndex);
+    expect(forceAddIndex).toBeLessThan(commitIndex);
   });
 });
 
@@ -406,5 +458,49 @@ describe("gitStashCreate", () => {
     outputs["stash create --include-untracked"] = "";
     const result = gitStashCreate("/test", deps);
     expect(result).toBe("HEAD");
+  });
+});
+
+describe("stageFiles", () => {
+  let deps: GitDeps;
+
+  beforeEach(() => {
+    deps = {
+      execSync: vi.fn(() => "") as any,
+      existsSync: vi.fn().mockReturnValue(false),
+      mkdirSync: vi.fn(),
+      writeFileSync: vi.fn(),
+      unlinkSync: vi.fn(),
+      rmSync: vi.fn(),
+    };
+  });
+
+  it("calls git add -f with provided files", () => {
+    stageFiles("/test", [".pi/tdd/state.json", ".pi/tdd/rules.json"], deps);
+    const call = (deps.execSync as any).mock.calls[0];
+    const cmd = call[0] as string;
+    expect(cmd).toContain("git add -f");
+    expect(cmd).toContain(".pi/tdd/state.json");
+    expect(cmd).toContain(".pi/tdd/rules.json");
+    // Isolated from main project git
+    expect(call[1].env.GIT_DIR).toBe("/test/.pi/tdd/.git");
+    expect(call[1].env.GIT_WORK_TREE).toBe("/test");
+  });
+
+  it("does nothing when files list is empty", () => {
+    stageFiles("/test", [], deps);
+    expect(deps.execSync).not.toHaveBeenCalled();
+  });
+
+  it("handles a single file", () => {
+    stageFiles("/test", [".pi/tdd/state.json"], deps);
+    const call = (deps.execSync as any).mock.calls[0];
+    const cmd = call[0] as string;
+    expect(cmd).toContain("git add -f");
+    expect(cmd).toContain(".pi/tdd/state.json");
+    expect(cmd).not.toContain(".pi/tdd/rules.json");
+    // Isolated from main project git
+    expect(call[1].env.GIT_DIR).toBe("/test/.pi/tdd/.git");
+    expect(call[1].env.GIT_WORK_TREE).toBe("/test");
   });
 });
