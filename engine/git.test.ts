@@ -131,19 +131,28 @@ describe("git operations", () => {
     expect(deps.execSync).not.toHaveBeenCalled();
   });
 
-  it("initGit force-adds .pi/tdd/ to bypass worktree gitignore", () => {
+  it("initGit force-adds TDD config files to bypass worktree gitignore", () => {
+    deps.existsSync = vi.fn().mockImplementation((p: string) =>
+      p.includes(".pi/tdd/") && !p.endsWith(".git"),
+    );
     initGit("/test", deps);
     const call = (deps.execSync as any).mock.calls.find(
-      (c: any[]) => c[0].includes("git add -f .pi/tdd/"),
+      (c: any[]) => c[0].includes("git add -f"),
     );
     expect(call).toBeDefined();
-    // Verifies isolation: all git commands target the private repo, not the main project .git
-    const env = call[1].env;
-    expect(env.GIT_DIR).toBe("/test/.pi/tdd/.git");
-    expect(env.GIT_WORK_TREE).toBe("/test");
+    expect(call[0]).toContain(".pi/tdd/state.json");
+    expect(call[0]).toContain(".pi/tdd/rules.json");
+    expect(call[0]).toContain(".pi/tdd/.gitignore");
+    expect(call[0]).not.toContain("tdd.log");
+    // Isolation: all git commands target the private repo, not the main project .git
+    expect(call[1].env.GIT_DIR).toBe("/test/.pi/tdd/.git");
+    expect(call[1].env.GIT_WORK_TREE).toBe("/test");
   });
 
   it("initGit force-adds after add -A and before commit", () => {
+    deps.existsSync = vi.fn().mockImplementation((p: string) =>
+      p.includes(".pi/tdd/") && !p.endsWith(".git"),
+    );
     initGit("/test", deps);
     const calls = (deps.execSync as any).mock.calls.map((c: any[]) => c[0]);
     const addAIndex = calls.findIndex((c: string) => c.includes("git add -A "));
@@ -153,21 +162,34 @@ describe("git operations", () => {
     expect(forceAddIndex).toBeLessThan(commitIndex);
   });
 
-  it("snapshot force-adds .pi/tdd/ to bypass worktree gitignore", () => {
+  it("snapshot force-adds state.json, rules.json, .gitignore", () => {
     outputs["rev-parse HEAD"] = "hash123\n";
+    deps.existsSync = vi.fn().mockImplementation((p: string) =>
+      p.includes(".pi/tdd/state.json") ||
+        p.includes(".pi/tdd/rules.json") ||
+        p.includes(".pi/tdd/.gitignore"),
+    );
     snapshot("/test", "green", deps);
     const call = (deps.execSync as any).mock.calls.find(
-      (c: any[]) => c[0].includes("git add -f .pi/tdd/"),
+      (c: any[]) => c[0].includes("git add -f"),
     );
     expect(call).toBeDefined();
-    // Verifies isolation: all git commands target the private repo, not the main project .git
-    const env = call[1].env;
-    expect(env.GIT_DIR).toBe("/test/.pi/tdd/.git");
-    expect(env.GIT_WORK_TREE).toBe("/test");
+    expect(call[0]).toContain(".pi/tdd/state.json");
+    expect(call[0]).toContain(".pi/tdd/rules.json");
+    expect(call[0]).toContain(".pi/tdd/.gitignore");
+    expect(call[0]).not.toContain("tdd.log");
+    // Isolation: all git commands target the private repo, not the main project .git
+    expect(call[1].env.GIT_DIR).toBe("/test/.pi/tdd/.git");
+    expect(call[1].env.GIT_WORK_TREE).toBe("/test");
   });
 
   it("snapshot force-adds after add -A and before commit", () => {
     outputs["rev-parse HEAD"] = "hash456\n";
+    deps.existsSync = vi.fn().mockImplementation((p: string) =>
+      p.includes(".pi/tdd/state.json") ||
+        p.includes(".pi/tdd/rules.json") ||
+        p.includes(".pi/tdd/.gitignore"),
+    );
     snapshot("/test", "red", deps);
     const calls = (deps.execSync as any).mock.calls.map((c: any[]) => c[0]);
     const addAIndex = calls.findIndex((c: string) => c.includes("git add -A "));
@@ -476,6 +498,9 @@ describe("stageFiles", () => {
   });
 
   it("calls git add -f with provided files", () => {
+    deps.existsSync = vi.fn().mockImplementation((p: string) =>
+      p.includes(".pi/tdd/state.json") || p.includes(".pi/tdd/rules.json"),
+    );
     stageFiles("/test", [".pi/tdd/state.json", ".pi/tdd/rules.json"], deps);
     const call = (deps.execSync as any).mock.calls[0];
     const cmd = call[0] as string;
@@ -487,20 +512,19 @@ describe("stageFiles", () => {
     expect(call[1].env.GIT_WORK_TREE).toBe("/test");
   });
 
-  it("does nothing when files list is empty", () => {
-    stageFiles("/test", [], deps);
+  it("skips files that don't exist", () => {
+    deps.existsSync = vi.fn().mockReturnValue(false);
+    stageFiles("/test", [".pi/tdd/state.json", ".pi/tdd/rules.json"], deps);
     expect(deps.execSync).not.toHaveBeenCalled();
   });
 
-  it("handles a single file", () => {
-    stageFiles("/test", [".pi/tdd/state.json"], deps);
+  it("handles a single existing file when others don't exist", () => {
+    deps.existsSync = vi.fn().mockImplementation((p: string) =>
+      p.includes(".pi/tdd/state.json"),
+    );
+    stageFiles("/test", [".pi/tdd/state.json", ".pi/tdd/rules.json"], deps);
     const call = (deps.execSync as any).mock.calls[0];
-    const cmd = call[0] as string;
-    expect(cmd).toContain("git add -f");
-    expect(cmd).toContain(".pi/tdd/state.json");
-    expect(cmd).not.toContain(".pi/tdd/rules.json");
-    // Isolated from main project git
-    expect(call[1].env.GIT_DIR).toBe("/test/.pi/tdd/.git");
-    expect(call[1].env.GIT_WORK_TREE).toBe("/test");
+    expect(call[0]).toContain(".pi/tdd/state.json");
+    expect(call[0]).not.toContain(".pi/tdd/rules.json");
   });
 });
