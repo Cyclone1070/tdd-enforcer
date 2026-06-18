@@ -1,20 +1,35 @@
 # TDD Enforcer — Behaviour Spec
 
-## Entry Gate (all surfaces)
+## Entry Gate — `loadTddState(root)` (all surfaces)
 
 Every surface (commands, hooks, tools) hits this first:
 
 ```
-1. .pi/tdd/ exists?
-   NO  ──► error: "Missing .pi/tdd/. See the tdd-enforcer skill."
-
-2. rules.json exists and parses?
-   NO  ──► error: "Missing/invalid rules.json. See the tdd-enforcer skill."
-
-3. state.json exists and parses?
-   YES ──► use it
-   NO  ──► auto-create from git HEAD commit message.
-            If no git repo: create { enabled: false, current: "red" }.
+loadTddState(root):
+   │
+   ├── .pi/tdd/ exists?       NO → "Missing .pi/tdd/. See the tdd-enforcer skill."
+   │
+   ├── rules.json exists?     NO → "Missing .pi/tdd/rules.json. See the tdd-enforcer skill."
+   │
+   ├── rules.json valid?      NO → "Invalid .pi/tdd/rules.json. See the tdd-enforcer skill."
+   │
+   ├── .pi/tdd/.git/ exists?  NO → initGit(root)
+   │                              FAIL → "Failed to initialise private git repo."
+   │
+   ├── state.json exists?     NO → recoverState()
+   │   │
+   │   └── recoverState():
+   │       ├── .git exists? + headMessage readable?
+   │       │   ├── "tdd: init"        → { enabled: false, current: "red" }
+   │       │   ├── "tdd: red"         → { enabled: true,  current: "green" }
+   │       │   ├── "tdd: green"       → { enabled: true,  current: "refactor" }
+   │       │   ├── "tdd: refactor"    → { enabled: true,  current: "red" }
+   │       │   └── no match / error   → { enabled: false, current: "red" }
+   │       └── no .git / no commits   → { enabled: false, current: "red" }
+   │
+   ├── state.json valid?       NO → recoverState() (same as above)
+   │
+   └── return { ok: true, state, config }
 ```
 
 After this gate, every surface has `state` + `config`. Then branches on `state.enabled`.

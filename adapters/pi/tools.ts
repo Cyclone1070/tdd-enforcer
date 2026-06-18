@@ -4,7 +4,7 @@ import { exec } from "node:child_process";
 import { promisify } from "node:util";
 
 const asyncExec = promisify(exec);
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import {
   savePhaseState,
   nextPhase,
@@ -21,6 +21,320 @@ import { getNudgePrompt } from "./prompts.js";
 import { loadTddState } from "./helpers.js";
 import { tddLog } from "./log.js";
 
+// ── De dependency types ─────────────────────────────────────────────────────
+
+export interface NextPhaseDeps {
+  loadTddState: typeof loadTddState;
+  nextPhase: typeof nextPhase;
+  getDisallowedChanges: typeof getDisallowedChanges;
+  checkGate: typeof checkGate;
+  snapshot: typeof snapshot;
+  savePhaseState: typeof savePhaseState;
+  getNudgePrompt: typeof getNudgePrompt;
+  asyncExec: (command: string, options?: { cwd?: string; timeout?: number }) => Promise<{ stdout: string; stderr: string }>;
+  tddLog: typeof tddLog;
+}
+
+export interface PreviousPhaseDeps {
+  loadTddState: typeof loadTddState;
+  hasParent: typeof hasParent;
+  headMessage: typeof headMessage;
+  resetHard: typeof resetHard;
+  undoLastCommit: typeof undoLastCommit;
+  savePhaseState: typeof savePhaseState;
+  tddLog: typeof tddLog;
+}
+
+export interface TddStatusDeps {
+  loadTddState: typeof loadTddState;
+  tddLog: typeof tddLog;
+}
+
+// ── Default deps ────────────────────────────────────────────────────────────
+
+const defaultNextPhaseDeps: NextPhaseDeps = {
+  loadTddState,
+  nextPhase,
+  getDisallowedChanges,
+  checkGate,
+  snapshot,
+  savePhaseState,
+  getNudgePrompt,
+  asyncExec,
+  tddLog,
+};
+
+const defaultPreviousPhaseDeps: PreviousPhaseDeps = {
+  loadTddState,
+  hasParent,
+  headMessage,
+  resetHard,
+  undoLastCommit,
+  savePhaseState,
+  tddLog,
+};
+
+const defaultTddStatusDeps: TddStatusDeps = {
+  loadTddState,
+  tddLog,
+};
+
+// ── executeNextPhase ────────────────────────────────────────────────────────
+
+export async function executeNextPhase(
+  ctx: ExtensionContext,
+  deps: NextPhaseDeps = defaultNextPhaseDeps,
+): Promise<{ content: Array<{ type: string; text: string }>; details?: Record<string, unknown> }> {
+  const root = ctx.cwd;
+  const tddDir = join(root, ".pi", "tdd");
+  const tdd = deps.loadTddState(root);
+  if (!tdd.ok) {
+    deps.tddLog(tddDir, "WARN", "next_tdd_phase: TDD not active", { reason: tdd.reason });
+    return { content: [{ type: "text", text: `TDD: ${tdd.reason}` }], details: {} };
+  }
+  if (!tdd.state.enabled) {
+    deps.tddLog(tddDir, "WARN", "next_tdd_phase: TDD disabled");
+    return { content: [{ type: "text", text: "TDD is not enabled. Run /tdd:on to enable it." }], details: {} };
+  }
+
+  const { state, config } = tdd;
+  const from = state.current;
+  const to = deps.nextPhase(from) as Phase;
+
+  deps.tddLog(tddDir, "INFO", "next_tdd_phase: starting", { from, to });
+
+  // 1. Allowlist check
+  const violations = deps.getDisallowedChanges(root, from, config);
+  if (violations.length > 0) {
+    deps.tddLog(tddDir, "WARN", "next_tdd_phase: blocked by allowlist", {
+      from,
+      violations,
+    });
+    return {
+      content: [
+        {
+          type: "text",
+          text:
+            `BLOCKED: files not allowed in ${from.toUpperCase()} phase:\n` +
+            violations.map((f) => `  - ${f}`).join("\n") +
+            `\nRevert or remove them before proceeding.\n\nInspect with: cd .pi/tdd && git diff HEAD -- ${violations[0]}`,
+        },
+      ],
+      details: {},
+    };
+  }
+
+  // 2. Gate check
+  const testRunner: TestRunner = async (commands, timeout) => {
+    const results = await Promise.all(
+      commands.map(async (cmd) => {
+        try {
+          await deps.asyncExec(cmd, { cwd: root, timeout: timeout * 1000 });
+          return { command: cmd, passed: true };
+        } catch {
+          return { command: cmd, passed: false };
+        }
+      }),
+    );
+
+    const failed = results.filter((r) => !r.passed);
+    if (failed.length > 0) {
+      return {
+        passed: false,
+        message: "Tests failed:\n" + failed.map((f) => `  - ${f.command}`).join("\n"),
+      };
+    }
+    return { passed: true, message: "All tests passed." };
+  };
+
+  const gate = await deps.checkGate(from, to, testRunner, config);
+  deps.tddLog(tddDir, "DEBUG", "next_tdd_phase: gate result", {
+    from,
+    to,
+    passed: gate.passed,
+    message: gate.message,
+  });
+
+  if (!gate.passed) {
+    return { content: [{ type: "text", text: gate.message }], details: {} };
+  }
+
+  // 3. Snapshot — label with the phase the work was done in
+  const hash = deps.snapshot(root, from);
+  deps.tddLog(tddDir, "INFO", "next_tdd_phase: snapshot created", {
+    from,
+    to,
+    hash,
+  });
+
+  // 4. Save state
+  state.current = to;
+  deps.savePhaseState(root, state);
+  deps.tddLog(tddDir, "INFO", "next_tdd_phase: complete", { from, to });
+
+  return {
+    content: [{ type: "text", text: deps.getNudgePrompt(to, config) }],
+    details: {},
+  };
+}
+
+// ── executePreviousPhase ────────────────────────────────────────────────────
+
+export async function executePreviousPhase(
+  ctx: ExtensionContext,
+  deps: PreviousPhaseDeps = defaultPreviousPhaseDeps,
+): Promise<{ content: Array<{ type: string; text: string }>; details?: Record<string, unknown> }> {
+  const root = ctx.cwd;
+  const tddDir = join(root, ".pi", "tdd");
+  const tdd = deps.loadTddState(root);
+  if (!tdd.ok) {
+    deps.tddLog(tddDir, "WARN", "previous_tdd_phase: TDD not active", {
+      reason: tdd.reason,
+    });
+    return { content: [{ type: "text", text: `TDD: ${tdd.reason}` }], details: {} };
+  }
+  if (!tdd.state.enabled) {
+    deps.tddLog(tddDir, "WARN", "previous_tdd_phase: TDD disabled");
+    return { content: [{ type: "text", text: "TDD is not enabled. Run /tdd:on to enable it." }], details: {} };
+  }
+
+  const { state } = tdd;
+
+  if (!deps.hasParent(root)) {
+    deps.tddLog(tddDir, "WARN", "previous_tdd_phase: no parent commit", {
+      phase: state.current,
+    });
+    return {
+      content: [{ type: "text", text: "No previous phase to revert to." }],
+      details: {},
+    };
+  }
+
+  // Read phase from HEAD snapshot commit message (source of truth).
+  // Snapshot is labeled with the phase the work was done in, so we use
+  // it directly — no hardcoded phase map needed.
+  const headMsg = deps.headMessage(root);
+  const phaseMatch = headMsg.match(/^tdd: (red|green|refactor)/);
+  if (!phaseMatch) {
+    deps.tddLog(tddDir, "ERROR", "previous_tdd_phase: invalid HEAD message", {
+      headMsg,
+    });
+    return {
+      content: [
+        {
+          type: "text",
+          text: `HEAD commit "${headMsg}" is not a TDD snapshot. Cannot determine previous phase.\n` +
+                `The private git repo at .pi/tdd must not be manually modified. ` +
+                `Tampering with it will cause TDD state corruption.`,
+        },
+      ],
+      details: {},
+    };
+  }
+  const label = phaseMatch[1];
+  if (label !== "red" && label !== "green" && label !== "refactor") {
+    deps.tddLog(tddDir, "ERROR", "previous_tdd_phase: invalid phase label", {
+      headMsg,
+      label,
+    });
+    return {
+      content: [
+        {
+          type: "text",
+          text: `HEAD commit "${headMsg}" has unexpected label. Cannot determine previous phase.`,
+        },
+      ],
+      details: {},
+    };
+  }
+  const prevPhase: Phase = label;
+  deps.tddLog(tddDir, "INFO", "previous_tdd_phase: reverting", {
+    from: state.current,
+    to: prevPhase,
+    headMsg,
+  });
+
+  // 1. Nuke any uncommitted changes, WT matches HEAD
+  deps.resetHard(root);
+  deps.tddLog(tddDir, "DEBUG", "previous_tdd_phase: resetHard done");
+
+  // 2. Pop last snapshot commit, keep its content as unstaged
+  deps.undoLastCommit(root);
+  deps.tddLog(tddDir, "DEBUG", "previous_tdd_phase: undoLastCommit done");
+
+  // 3. Update phase label from the snapshot's own label
+  state.current = prevPhase;
+  deps.savePhaseState(root, state);
+  deps.tddLog(tddDir, "INFO", "previous_tdd_phase: complete", {
+    to: prevPhase,
+  });
+
+  return {
+    content: [
+      {
+        type: "text",
+        text: `Reverted to ${prevPhase.toUpperCase()}. Working tree has the previous snapshot content as unstaged changes.`,
+      },
+    ],
+    details: {},
+  };
+}
+
+// ── executeTddStatus ────────────────────────────────────────────────────────
+
+export async function executeTddStatus(
+  ctx: ExtensionContext,
+  deps: TddStatusDeps = defaultTddStatusDeps,
+): Promise<{ content: Array<{ type: string; text: string }>; details?: Record<string, unknown> }> {
+  const root = ctx.cwd;
+  const tddDir = join(root, ".pi", "tdd");
+  const result = deps.loadTddState(root);
+
+  if (!result.ok) {
+    deps.tddLog(tddDir, "WARN", "tdd_status: TDD not active", {
+      reason: result.reason,
+    });
+    return { content: [{ type: "text", text: `TDD: ${result.reason}` }], details: {} };
+  }
+  if (!result.state.enabled) {
+    deps.tddLog(tddDir, "WARN", "tdd_status: TDD disabled");
+    return { content: [{ type: "text", text: "TDD is not enabled. Run /tdd:on to enable it." }], details: {} };
+  }
+
+  const { state, config } = result;
+  const phaseStr = state.current.toUpperCase();
+  const redGlobs = config.allowedRedPhaseFiles.join(", ") || "(none)";
+  const greenGlobs = config.allowedGreenPhaseFiles.join(", ") || "(none)";
+  const commands = config.testCommands.join(", ") || "(none)";
+
+  deps.tddLog(tddDir, "INFO", "tdd_status: queried", {
+    phase: state.current,
+  });
+
+  return {
+    content: [
+      {
+        type: "text",
+        text:
+          `TDD enforcer enabled\n` +
+          `Current phase: ${phaseStr}\n` +
+          `Test files: ${redGlobs}\n` +
+          `Impl files: ${greenGlobs}\n` +
+          `Test commands: ${commands}`,
+      },
+    ],
+    details: {
+      enabled: true,
+      phase: state.current,
+      allowedRedPhaseFiles: config.allowedRedPhaseFiles,
+      allowedGreenPhaseFiles: config.allowedGreenPhaseFiles,
+      testCommands: config.testCommands,
+    },
+  };
+}
+
+// ── registerTools ───────────────────────────────────────────────────────────
+
 export function registerTools(pi: ExtensionAPI): void {
   pi.registerTool({
     name: "next_tdd_phase",
@@ -29,98 +343,8 @@ export function registerTools(pi: ExtensionAPI): void {
       "Advance to the next TDD phase. Runs transition gates (test pass/fail checks) " +
       "and allowlist validation (no forbidden files modified).",
     parameters: Type.Object({}),
-    async execute(_toolCallId, _params, _signal, _onUpdate, ctx) {
-      const root = ctx.cwd;
-      const tddDir = join(root, ".pi", "tdd");
-      const tdd = loadTddState(root);
-      if (!tdd.ok) {
-        tddLog(tddDir, "WARN", "next_tdd_phase: TDD not active", { reason: tdd.reason });
-        return { content: [{ type: "text", text: `TDD: ${tdd.reason}` }], details: {} };
-      }
-      if (!tdd.state.enabled) {
-        tddLog(tddDir, "WARN", "next_tdd_phase: TDD disabled");
-        return { content: [{ type: "text", text: "TDD is not enabled. Run /tdd:on to enable it." }], details: {} };
-      }
-
-      const { state, config } = tdd;
-      const from = state.current;
-      const to = nextPhase(from);
-
-      tddLog(tddDir, "INFO", "next_tdd_phase: starting", { from, to });
-
-      // 1. Allowlist check
-      const violations = getDisallowedChanges(root, from, config);
-      if (violations.length > 0) {
-        tddLog(tddDir, "WARN", "next_tdd_phase: blocked by allowlist", {
-          from,
-          violations,
-        });
-        return {
-          content: [
-            {
-              type: "text",
-              text:
-                `BLOCKED: files not allowed in ${from.toUpperCase()} phase:\n` +
-                violations.map((f) => `  - ${f}`).join("\n") +
-                `\nRevert or remove them before proceeding.\n\nInspect with: cd .pi/tdd && git diff HEAD -- ${violations[0]}`,
-            },
-          ],
-          details: {},
-        };
-      }
-
-      // 2. Gate check
-      const testRunner: TestRunner = async (commands, timeout) => {
-        const results = await Promise.all(
-          commands.map(async (cmd) => {
-            try {
-              await asyncExec(cmd, { cwd: root, timeout: timeout * 1000 });
-              return { command: cmd, passed: true };
-            } catch {
-              return { command: cmd, passed: false };
-            }
-          }),
-        );
-
-        const failed = results.filter((r) => !r.passed);
-        if (failed.length > 0) {
-          return {
-            passed: false,
-            message: "Tests failed:\n" + failed.map((f) => `  - ${f.command}`).join("\n"),
-          };
-        }
-        return { passed: true, message: "All tests passed." };
-      };
-
-      const gate = await checkGate(from, to, testRunner, config);
-      tddLog(tddDir, "DEBUG", "next_tdd_phase: gate result", {
-        from,
-        to,
-        passed: gate.passed,
-        message: gate.message,
-      });
-
-      if (!gate.passed) {
-        return { content: [{ type: "text", text: gate.message }], details: {} };
-      }
-
-      // 3. Snapshot — label with the phase the work was done in
-      const hash = snapshot(root, from);
-      tddLog(tddDir, "INFO", "next_tdd_phase: snapshot created", {
-        from,
-        to,
-        hash,
-      });
-
-      // 4. Save state
-      state.current = to;
-      savePhaseState(root, state);
-      tddLog(tddDir, "INFO", "next_tdd_phase: complete", { from, to });
-
-      return {
-        content: [{ type: "text", text: getNudgePrompt(to, config) }],
-        details: {},
-      };
+    execute(_toolCallId, _params, _signal, _onUpdate, ctx) {
+      return executeNextPhase(ctx, defaultNextPhaseDeps);
     },
   });
 
@@ -132,85 +356,8 @@ export function registerTools(pi: ExtensionAPI): void {
       "to what it was when the last phase ended. Use when the previous phase's work was wrong " +
       "and this phase cannot proceed.",
     parameters: Type.Object({}),
-    async execute(_toolCallId, _params, _signal, _onUpdate, ctx) {
-      const root = ctx.cwd;
-      const tddDir = join(root, ".pi", "tdd");
-      const tdd = loadTddState(root);
-      if (!tdd.ok) {
-        tddLog(tddDir, "WARN", "previous_tdd_phase: TDD not active", {
-          reason: tdd.reason,
-        });
-        return { content: [{ type: "text", text: `TDD: ${tdd.reason}` }], details: {} };
-      }
-      if (!tdd.state.enabled) {
-        tddLog(tddDir, "WARN", "previous_tdd_phase: TDD disabled");
-        return { content: [{ type: "text", text: "TDD is not enabled. Run /tdd:on to enable it." }], details: {} };
-      }
-
-      const { state } = tdd;
-
-      if (!hasParent(root)) {
-        tddLog(tddDir, "WARN", "previous_tdd_phase: no parent commit", {
-          phase: state.current,
-        });
-        return {
-          content: [{ type: "text", text: "No previous phase to revert to." }],
-          details: {},
-        };
-      }
-
-      // Read phase from HEAD snapshot commit message (source of truth).
-      // Snapshot is labeled with the phase the work was done in, so we use
-      // it directly — no hardcoded phase map needed.
-      const headMsg = headMessage(root);
-      const phaseMatch = headMsg.match(/^tdd: (red|green|refactor)/);
-      if (!phaseMatch) {
-        tddLog(tddDir, "ERROR", "previous_tdd_phase: invalid HEAD message", {
-          headMsg,
-        });
-        return {
-          content: [
-            {
-              type: "text",
-              text: `HEAD commit "${headMsg}" is not a TDD snapshot. Cannot determine previous phase.\n` +
-                    `The private git repo at .pi/tdd must not be manually modified. ` +
-                    `Tampering with it will cause TDD state corruption.`,
-            },
-          ],
-          details: {},
-        };
-      }
-      const prevPhase = phaseMatch[1] as Phase;
-      tddLog(tddDir, "INFO", "previous_tdd_phase: reverting", {
-        from: state.current,
-        to: prevPhase,
-        headMsg,
-      });
-
-      // 1. Nuke any uncommitted changes, WT matches HEAD
-      resetHard(root);
-      tddLog(tddDir, "DEBUG", "previous_tdd_phase: resetHard done");
-
-      // 2. Pop last snapshot commit, keep its content as unstaged
-      undoLastCommit(root);
-      tddLog(tddDir, "DEBUG", "previous_tdd_phase: undoLastCommit done");
-
-      // 3. Update phase label from the snapshot's own label
-      state.current = prevPhase;
-      savePhaseState(root, state);
-      tddLog(tddDir, "INFO", "previous_tdd_phase: complete", {
-        to: prevPhase,
-      });
-
-      return {
-        content: [
-          {
-            type: "text",
-            text: `Reverted to ${prevPhase.toUpperCase()}. Working tree has the previous snapshot content as unstaged changes.`,
-          },
-        ],
-        details: {},
-      };
+    execute(_toolCallId, _params, _signal, _onUpdate, ctx) {
+      return executePreviousPhase(ctx, defaultPreviousPhaseDeps);
     },
   });
 
@@ -221,52 +368,8 @@ export function registerTools(pi: ExtensionAPI): void {
       "Show the current TDD enforcement status: enabled/disabled, current phase, " +
       "allowed file globs, and test commands.",
     parameters: Type.Object({}),
-    async execute(_toolCallId, _params, _signal, _onUpdate, ctx) {
-      const root = ctx.cwd;
-      const tddDir = join(root, ".pi", "tdd");
-      const result = loadTddState(root);
-
-      if (!result.ok) {
-        tddLog(tddDir, "WARN", "tdd_status: TDD not active", {
-          reason: result.reason,
-        });
-        return { content: [{ type: "text", text: `TDD: ${result.reason}` }], details: {} };
-      }
-      if (!result.state.enabled) {
-        tddLog(tddDir, "WARN", "tdd_status: TDD disabled");
-        return { content: [{ type: "text", text: "TDD is not enabled. Run /tdd:on to enable it." }], details: {} };
-      }
-
-      const { state, config } = result;
-      const phaseStr = state.current.toUpperCase();
-      const redGlobs = config.allowedRedPhaseFiles.join(", ") || "(none)";
-      const greenGlobs = config.allowedGreenPhaseFiles.join(", ") || "(none)";
-      const commands = config.testCommands.join(", ") || "(none)";
-
-      tddLog(tddDir, "INFO", "tdd_status: queried", {
-        phase: state.current,
-      });
-
-      return {
-        content: [
-          {
-            type: "text",
-            text:
-              `TDD enforcer enabled\n` +
-              `Current phase: ${phaseStr}\n` +
-              `Test files: ${redGlobs}\n` +
-              `Impl files: ${greenGlobs}\n` +
-              `Test commands: ${commands}`,
-          },
-        ],
-        details: {
-          enabled: true,
-          phase: state.current,
-          allowedRedPhaseFiles: config.allowedRedPhaseFiles,
-          allowedGreenPhaseFiles: config.allowedGreenPhaseFiles,
-          testCommands: config.testCommands,
-        },
-      };
+    execute(_toolCallId, _params, _signal, _onUpdate, ctx) {
+      return executeTddStatus(ctx, defaultTddStatusDeps);
     },
   });
 }

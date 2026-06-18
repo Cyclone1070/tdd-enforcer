@@ -11,18 +11,29 @@ export type TddLoadResult =
  * Recover state.json from private git HEAD, or create default.
  * Returns the state (does not save to disk — caller does that).
  */
-function recoverState(root: string, tddDir: string): PhaseState {
+function recoverState(
+  root: string,
+  tddDir: string,
+  deps: {
+    existsSync: typeof existsSync;
+    headMessage: typeof headMessage;
+    nextPhase: typeof nextPhase;
+  } = { existsSync, headMessage, nextPhase },
+): PhaseState {
   const gitDir = join(tddDir, ".git");
-  if (existsSync(gitDir)) {
+  if (deps.existsSync(gitDir)) {
     try {
-      const msg = headMessage(root);
+      const msg = deps.headMessage(root);
       const m = msg.match(/^tdd: (red|green|refactor|init)$/);
       if (m) {
-        const headPhase = m[1] as Phase;
-        if (headPhase === "init") {
+        const label = m[1];
+        if (label === "init") {
           return { enabled: false, current: "red" };
         }
-        const next = nextPhase(headPhase);
+        if (label !== "red" && label !== "green" && label !== "refactor") {
+          return { enabled: false, current: "red" };
+        }
+        const next = deps.nextPhase(label);
         return { enabled: true, current: next ?? "red" };
       }
     } catch {
@@ -40,29 +51,48 @@ function recoverState(root: string, tddDir: string): PhaseState {
  *
  * Callers must check state.enabled themselves if they need active enforcement.
  */
-export function loadTddState(root: string): TddLoadResult {
+export function loadTddState(
+  root: string,
+  deps: {
+    existsSync: typeof existsSync;
+    loadConfig: typeof loadConfig;
+    initGit: typeof initGit;
+    loadPhaseState: typeof loadPhaseState;
+    savePhaseState: typeof savePhaseState;
+    headMessage: typeof headMessage;
+    nextPhase: typeof nextPhase;
+  } = {
+    existsSync,
+    loadConfig,
+    initGit,
+    loadPhaseState,
+    savePhaseState,
+    headMessage,
+    nextPhase,
+  },
+): TddLoadResult {
   const tddDir = join(root, ".pi", "tdd");
-  if (!existsSync(tddDir)) {
+  if (!deps.existsSync(tddDir)) {
     return { ok: false, reason: "Missing .pi/tdd/ directory. See the tdd-enforcer skill to learn how to set up TDD configs." };
   }
 
   const rulesPath = join(tddDir, "rules.json");
-  if (!existsSync(rulesPath)) {
+  if (!deps.existsSync(rulesPath)) {
     return { ok: false, reason: "Missing .pi/tdd/rules.json. See the tdd-enforcer skill to learn how to set up TDD configs." };
   }
 
   let config: Config;
   try {
-    config = loadConfig(root);
+    config = deps.loadConfig(root);
   } catch (e) {
     return { ok: false, reason: `Invalid .pi/tdd/rules.json: ${(e as Error).message}. See the tdd-enforcer skill.` };
   }
 
   // Init git if missing — required for state recovery and all consumers
   const gitDir = join(tddDir, ".git");
-  if (!existsSync(gitDir)) {
+  if (!deps.existsSync(gitDir)) {
     try {
-      initGit(root);
+      deps.initGit(root);
     } catch (e) {
       return { ok: false, reason: `Failed to initialise private git repo: ${(e as Error).message}` };
     }
@@ -71,16 +101,16 @@ export function loadTddState(root: string): TddLoadResult {
   // Auto-create state.json if missing or corrupted
   const phasePath = join(tddDir, "state.json");
   let state: PhaseState | undefined;
-  if (existsSync(phasePath)) {
+  if (deps.existsSync(phasePath)) {
     try {
-      state = loadPhaseState(root);
+      state = deps.loadPhaseState(root);
     } catch {
       // Corrupted — recover below
     }
   }
   if (!state) {
-    state = recoverState(root, tddDir);
-    savePhaseState(root, state);
+    state = recoverState(root, tddDir, { existsSync: deps.existsSync, headMessage: deps.headMessage, nextPhase: deps.nextPhase });
+    deps.savePhaseState(root, state);
   }
 
   return { ok: true, state, config };

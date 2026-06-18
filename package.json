@@ -9,6 +9,8 @@
     "picomatch": "^4.0.4"
   },
   "devDependencies": {
+    "@earendil-works/pi-coding-agent": "^0.79.6",
+    "typebox": "^1.2.16",
     "vitest": "^3"
   },
   "pi": {

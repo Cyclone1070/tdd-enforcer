@@ -70,9 +70,16 @@ export function getDisallowedChanges(
   projectRoot: string,
   phase: Phase,
   config: Config,
+  deps: {
+    changesSinceSnapshot: typeof changesSinceSnapshot;
+    disallowedFiles: typeof disallowedFiles;
+  } = {
+    changesSinceSnapshot,
+    disallowedFiles,
+  },
 ): string[] {
   if (phase === "refactor") return [];
 
-  const changed = changesSinceSnapshot(projectRoot);
-  return disallowedFiles(changed, phase, config);
+  const changed = deps.changesSinceSnapshot(projectRoot);
+  return deps.disallowedFiles(changed, phase, config);
 }

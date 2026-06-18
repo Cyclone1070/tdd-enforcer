@@ -1,10 +1,7 @@
-import { describe, it, expect } from "vitest";
-import { mkdirSync, writeFileSync, rmSync, existsSync } from "node:fs";
-import { join } from "node:path";
-import { tmpdir } from "node:os";
-import { nextPhase, checkGate, getDisallowedChanges } from "./transition.js";
+import { describe, it, expect, beforeEach, vi } from "vitest";
+import { getDisallowedChanges, nextPhase, checkGate } from "./transition.js";
 import type { Config, TestRunner } from "./types.js";
-import { initGit, snapshot } from "./git.js";
+import picomatch from "picomatch";
 
 // ── Pure unit tests: nextPhase ──────────────────────────────────────────────
 
@@ -124,17 +121,7 @@ describe("checkGate", () => {
   });
 });
 
-// ── Integration tests: getDisallowedChanges ──────────────────────────────────
-
-function withTempDir(fn: (dir: string) => void) {
-  const dir = join(tmpdir(), `tdd-transition-test-${Date.now()}`);
-  mkdirSync(dir, { recursive: true });
-  try {
-    fn(dir);
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
-}
+// ── Pure unit tests: getDisallowedChanges ────────────────────────────────────
 
 const denyConfig: Config = {
   allowedRedPhaseFiles: ["tests/**/*.test.ts"],
@@ -144,61 +131,79 @@ const denyConfig: Config = {
 };
 
 describe("getDisallowedChanges", () => {
+  let mockChangesSinceSnapshot: ReturnType<typeof vi.fn>;
+  let mockDisallowedFiles: ReturnType<typeof vi.fn>;
+
+  function makeDeps(overrides = {}) {
+    return {
+      changesSinceSnapshot: mockChangesSinceSnapshot,
+      disallowedFiles: mockDisallowedFiles,
+      ...overrides,
+    };
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockChangesSinceSnapshot = vi.fn().mockReturnValue([]);
+    mockDisallowedFiles = vi.fn().mockReturnValue([]);
+  });
+
   it("returns empty for refactor phase regardless of git state", () => {
-    withTempDir((dir) => {
-      // No git at all — safe because refactor returns early
-      expect(getDisallowedChanges(dir, "refactor", denyConfig)).toEqual([]);
-    });
+    const result = getDisallowedChanges("/any", "refactor", denyConfig, makeDeps());
+    expect(result).toEqual([]);
+    expect(mockChangesSinceSnapshot).not.toHaveBeenCalled();
   });
 
   it("returns empty when no files changed", () => {
-    withTempDir((dir) => {
-      initGit(dir);
-      snapshot(dir, "red");
-      expect(getDisallowedChanges(dir, "red", denyConfig)).toEqual([]);
-    });
+    mockChangesSinceSnapshot.mockReturnValue([]);
+    const result = getDisallowedChanges("/test", "red", denyConfig, makeDeps());
+    expect(result).toEqual([]);
+    expect(mockChangesSinceSnapshot).toHaveBeenCalledWith("/test");
   });
 
   it("returns disallowed files in red phase", () => {
-    withTempDir((dir) => {
-      initGit(dir);
-      snapshot(dir, "red");
-      mkdirSync(join(dir, "src"), { recursive: true });
-      mkdirSync(join(dir, "tests"), { recursive: true });
-      writeFileSync(join(dir, "src", "main.ts"), "// impl", "utf-8");
-      writeFileSync(join(dir, "tests", "foo.test.ts"), "// test", "utf-8");
-      writeFileSync(join(dir, "README.md"), "// docs", "utf-8");
-      const violations = getDisallowedChanges(dir, "red", denyConfig);
-      expect(violations).toContain("src/main.ts");
-      expect(violations).not.toContain("tests/foo.test.ts");
-      expect(violations).not.toContain("README.md");
+    mockChangesSinceSnapshot.mockReturnValue(["src/main.ts", "tests/foo.test.ts", "README.md"]);
+    const matchesRed = picomatch(denyConfig.allowedRedPhaseFiles);
+    const matchesGreen = picomatch(denyConfig.allowedGreenPhaseFiles);
+    mockDisallowedFiles.mockImplementation((changed: string[], phase: string) => {
+      if (phase === "red") {
+        return changed.filter((f: string) => !matchesRed(f) && matchesGreen(f));
+      }
+      return [];
     });
+    const violations = getDisallowedChanges("/test", "red", denyConfig, makeDeps());
+    expect(violations).toContain("src/main.ts");
+    expect(violations).not.toContain("tests/foo.test.ts");
+    expect(violations).not.toContain("README.md");
   });
 
   it("returns disallowed files in green phase", () => {
-    withTempDir((dir) => {
-      initGit(dir);
-      snapshot(dir, "green");
-      mkdirSync(join(dir, "tests"), { recursive: true });
-      mkdirSync(join(dir, "src"), { recursive: true });
-      writeFileSync(join(dir, "tests", "foo.test.ts"), "// test", "utf-8");
-      writeFileSync(join(dir, "src", "main.ts"), "// impl", "utf-8");
-      writeFileSync(join(dir, "package.json"), "{}", "utf-8");
-      const violations = getDisallowedChanges(dir, "green", denyConfig);
-      expect(violations).toContain("tests/foo.test.ts");
-      expect(violations).not.toContain("src/main.ts");
-      expect(violations).not.toContain("package.json");
+    mockChangesSinceSnapshot.mockReturnValue(["tests/foo.test.ts", "src/main.ts", "package.json"]);
+    const matchesRed = picomatch(denyConfig.allowedRedPhaseFiles);
+    const matchesGreen = picomatch(denyConfig.allowedGreenPhaseFiles);
+    mockDisallowedFiles.mockImplementation((changed: string[], phase: string) => {
+      if (phase === "green") {
+        return changed.filter((f: string) => matchesRed(f) && !matchesGreen(f));
+      }
+      return [];
     });
+    const violations = getDisallowedChanges("/test", "green", denyConfig, makeDeps());
+    expect(violations).toContain("tests/foo.test.ts");
+    expect(violations).not.toContain("src/main.ts");
+    expect(violations).not.toContain("package.json");
   });
 
   it("catches untracked files, not just modified", () => {
-    withTempDir((dir) => {
-      initGit(dir);
-      snapshot(dir, "red");
-      mkdirSync(join(dir, "src"), { recursive: true });
-      writeFileSync(join(dir, "src", "new.ts"), "// brand new", "utf-8");
-      const violations = getDisallowedChanges(dir, "red", denyConfig);
-      expect(violations).toContain("src/new.ts");
+    mockChangesSinceSnapshot.mockReturnValue(["src/new.ts"]);
+    const matchesRed = picomatch(denyConfig.allowedRedPhaseFiles);
+    const matchesGreen = picomatch(denyConfig.allowedGreenPhaseFiles);
+    mockDisallowedFiles.mockImplementation((changed: string[], phase: string) => {
+      if (phase === "red") {
+        return changed.filter((f: string) => !matchesRed(f) && matchesGreen(f));
+      }
+      return [];
     });
+    const violations = getDisallowedChanges("/test", "red", denyConfig, makeDeps());
+    expect(violations).toContain("src/new.ts");
   });
 });
