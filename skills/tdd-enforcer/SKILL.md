@@ -28,12 +28,12 @@ It locks files per phase — only test files in RED, only implementation files i
 
 ## Setup
 
-1. **Agent** creates `.pi/tdd/rules.json` with these fields:
+1. **Agent** checks if the repo has a test framework set up. If it doesn't, stop and ask the user what they want. Do not make assumptions, pick defaults, or proceed without their explicit decision. Then create `.pi/tdd/rules.json` with these fields:
 
 ```json
 {
   "blockedInRed":   ["src/**/*.ts", "lib/**/*.ts", "!src/**/*.test.ts"],
-  "blockedInGreen": ["**/*.test.ts", "**/*.spec.ts"],
+  "blockedInGreen": ["**/*.test.ts"],
   "testCommands":   ["npm test"],
   "timeoutSeconds": 30
 }
