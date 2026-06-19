@@ -1,24 +1,25 @@
 import type { Phase, Config } from "../../engine/types.js";
 
-export function getNudgePrompt(phase: Phase, config: Config, matchedFiles?: string[]): string {
-  const redPatterns = (matchedFiles ?? config.allowedRedPhaseFiles).join(", ");
-  const greenPatterns = config.allowedGreenPhaseFiles.join(", ");
+export function getNudgePrompt(phase: Phase, config: Config): string {
+  const redBlock = config.blockedInRed.join(", ");
+  const greenBlock = config.blockedInGreen.join(", ");
 
   switch (phase) {
     case "red":
       return (
-        `You are now in **RED** phase. Write failing tests matching: ${redPatterns}\n` +
-        "Only these files can be modified. Once tests fail, call `next_tdd_phase` to proceed to GREEN.\n" +
-        "Keep this cycle small. Write tests for one feature at a time. " +
-        "Cover happy path, edge cases, and unhappy paths before advancing to GREEN."
+        `You are now in **RED** phase. Write failing tests.\n` +
+        `Blocked files: ${redBlock}\n` +
+        "All other files are free to modify. Call `next_tdd_phase` to proceed to GREEN.\n" +
+        "Think about what could go wrong and test for it — don't just verify the happy path, " +
+        "cover unhappy paths and edge cases too. Keep cycles small so reverting is cheap."
       );
     case "green":
       return (
-        `You are now in **GREEN** phase. Test files (${redPatterns}) are locked.\n` +
-        `Implement features matching: ${greenPatterns}\n` +
-        "Call `next_tdd_phase` to proceed to REFACTOR.\n" +
-        "If the RED phase tests were wrong, call `previous_tdd_phase` to go back and fix them. " +
-        "Don't be afraid to discard — clean slate beats patched code."
+        `You are now in **GREEN** phase. Implement features.\n` +
+        `Blocked files: ${greenBlock}\n` +
+        "All other files are free to modify. Call `next_tdd_phase` to proceed to REFACTOR.\n" +
+        "Write minimal code to make the failing tests pass — nothing more.\n" +
+        "If the RED phase tests were wrong, call `previous_tdd_phase` to go back and fix them."
       );
     case "refactor":
       return (

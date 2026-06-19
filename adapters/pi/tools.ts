@@ -303,8 +303,8 @@ export async function executeTddStatus(
 
   const { state, config } = result;
   const phaseStr = state.current.toUpperCase();
-  const redGlobs = config.allowedRedPhaseFiles.join(", ") || "(none)";
-  const greenGlobs = config.allowedGreenPhaseFiles.join(", ") || "(none)";
+  const redBlk = config.blockedInRed.join(", ") || "(none)";
+  const greenBlk = config.blockedInGreen.join(", ") || "(none)";
   const commands = config.testCommands.join(", ") || "(none)";
 
   deps.tddLog(tddDir, "INFO", "tdd_status: queried", {
@@ -318,16 +318,16 @@ export async function executeTddStatus(
         text:
           `TDD enforcer enabled\n` +
           `Current phase: ${phaseStr}\n` +
-          `Test files: ${redGlobs}\n` +
-          `Impl files: ${greenGlobs}\n` +
+          `Blocked in RED: ${redBlk}\n` +
+          `Blocked in GREEN: ${greenBlk}\n` +
           `Test commands: ${commands}`,
       },
     ],
     details: {
       enabled: true,
       phase: state.current,
-      allowedRedPhaseFiles: config.allowedRedPhaseFiles,
-      allowedGreenPhaseFiles: config.allowedGreenPhaseFiles,
+      blockedInRed: config.blockedInRed,
+      blockedInGreen: config.blockedInGreen,
       testCommands: config.testCommands,
     },
   };
@@ -366,7 +366,7 @@ export function registerTools(pi: ExtensionAPI): void {
     label: "TDD Status",
     description:
       "Show the current TDD enforcement status: enabled/disabled, current phase, " +
-      "allowed file globs, and test commands.",
+      "blocked file globs per phase, and test commands.",
     parameters: Type.Object({}),
     execute(_toolCallId, _params, _signal, _onUpdate, ctx) {
       return executeTddStatus(ctx, defaultTddStatusDeps);

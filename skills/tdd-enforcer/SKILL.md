@@ -32,15 +32,16 @@ It locks files per phase — only test files in RED, only implementation files i
 
 ```json
 {
-  "allowedRedPhaseFiles": ["tests/**/*.test.ts"],
-  "allowedGreenPhaseFiles": ["src/**/*.ts"],
-  "testCommands": ["npm test"],
+  "blockedInRed":   ["src/**/*.ts", "lib/**/*.ts", "!src/**/*.test.ts"],
+  "blockedInGreen": ["**/*.test.ts", "**/*.spec.ts"],
+  "testCommands":   ["npm test"],
   "timeoutSeconds": 30
 }
 ```
 
-- `allowedRedPhaseFiles` — globs the agent can create/modify in RED phase (tests)
-- `allowedGreenPhaseFiles` — globs the agent can create/modify in GREEN phase (implementation)
+- `blockedInRed` — globs the agent **cannot** modify in RED phase (implementation files)
+- `blockedInGreen` — globs the agent **cannot** modify in GREEN phase (test files)
+- `!` exclusion prefix — optional, carves out subsets from a block list at init time. E.g. `!src/**/*.test.ts` excludes co-located test files from `blockedInRed` so the agent can write them in RED phase
 - `testCommands` — shell commands to run tests
 - `timeoutSeconds` — test timeout per command
 
@@ -51,31 +52,31 @@ It locks files per phase — only test files in RED, only implementation files i
 ## Phase Rules
 
 ### RED
-Write failing tests matching `allowedRedPhaseFiles` patterns. Files matching `allowedGreenPhaseFiles` are locked. Files matching neither set are always free. Call `next_tdd_phase` once tests fail.
+Files matching `blockedInRed` are locked — everything else is free.
+
+Write failing tests for one feature at a time. Think about what could go wrong and test for it — don't just verify the happy path, cover unhappy paths and edge cases too. Keep cycles small so reverting is cheap and safe if assumptions turn out wrong.
+
+Call `next_tdd_phase` once tests fail.
 
 ### GREEN
-Implement features matching `allowedGreenPhaseFiles` patterns. Test files from `allowedRedPhaseFiles` are locked. Files matching neither set are always free. Call `next_tdd_phase` once tests pass.
+Files matching `blockedInGreen` are locked — everything else is free.
+
+Write the simplest code that makes the failing tests pass — nothing more. The tests are your spec; if they pass, you're done.
+
+If the RED phase tests were wrong, call `previous_tdd_phase` to go back and fix them before implementing. All current changes are lost, but that's better since the current changes was building on false assumptions. Don't be afraid to discard — clean slate beats patched code.
+
+Call `next_tdd_phase` once all tests pass.
 
 ### REFACTOR
-All files are free to modify. Refactor without changing behaviour. Call `next_tdd_phase` once tests pass to start a new RED cycle.
+All files are free to modify. Refactor without changing behaviour.
+Call `next_tdd_phase` once tests pass to start a new RED cycle.
 
 ---
 
 ## Hard Rules
 
-- **Never bypass TDD.** If TDD blocks a change, it's because you're in the wrong phase or the file isn't allowed in this phase. The solution is always to work within the rules, not around them.
-
-  - Need to change a locked file? Either advance through the cycle (`next_tdd_phase`) or roll back to fix earlier work (`previous_tdd_phase`).
-  - Wrong assumptions about the task? Roll back with `previous_tdd_phase`, the phase restarts clean.
-  - Fundamentally blocked? Ask the user to run the appropriate `/tdd:` command (change phase, disable, or reset).
-
-- **Never write to `.pi/tdd/`.** The extension owns that directory — writes are blocked and bash changes are reverted. Any change you make there is ignored or overwritten.
-
-- **Never run `/tdd:` commands yourself.** They're registered as user-only commands. They won't work when you type them.
-
-- **Don't be afraid to discard.** If the previous phase work was wrong, all current-phase changes are built on false assumptions. Prefer a clean slate — call `previous_tdd_phase` and redo it properly.
-
-- **Keep cycles small but tests comprehensive.** Write tests for one feature at a time. Cover happy path, edge cases, and unhappy paths before moving to GREEN. Small cycles mean less to lose if assumptions turn out wrong. Reverting becomes cheap and safe.
+- **Never write to `.pi/tdd/`.** The extension owns that directory — writes are blocked and bash changes are reverted.
+- **Never run `/tdd:` commands yourself.** They're registered as user-only commands and won't work when you type them.
 
 ---
 
@@ -93,7 +94,7 @@ Also validates no locked files were modified. On success, records the current st
 Use when the previous phase's work was wrong and the current phase cannot proceed because of it. Rolls back to the previous phase so that work can be redone correctly. All changes made in the current phase are lost.
 
 ### `tdd_status`
-Shows the current phase, allowed file globs, and test commands.
+Shows the current phase, blocked file globs per phase, and test commands.
 
 ---
 

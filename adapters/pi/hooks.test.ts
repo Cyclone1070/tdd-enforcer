@@ -29,8 +29,8 @@ function makeResultDeps(overrides: Record<string, unknown> = {}) {
 }
 
 const VALID_CONFIG = {
-  allowedRedPhaseFiles: ["tests/**/*.test.ts"],
-  allowedGreenPhaseFiles: ["src/**/*.ts"],
+  blockedInRed: ["src/**/*.ts"],
+  blockedInGreen: ["tests/**/*.test.ts"],
   testCommands: ["npm test"],
   timeoutSeconds: 30,
 };

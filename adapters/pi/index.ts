@@ -119,8 +119,8 @@ export async function handleTddStatus(
   const { state, config } = result;
   const enabledStr = state.enabled ? "enabled" : "disabled";
   const phaseStr = state.current.toUpperCase();
-  const redGlobs = config.allowedRedPhaseFiles.join(", ") || "(none)";
-  const greenGlobs = config.allowedGreenPhaseFiles.join(", ") || "(none)";
+  const redBlk = config.blockedInRed.join(", ") || "(none)";
+  const greenBlk = config.blockedInGreen.join(", ") || "(none)";
   const commands = config.testCommands.join(", ") || "(none)";
 
   deps.tddLog(tddDir, "INFO", "tdd:status: queried", {
@@ -131,8 +131,8 @@ export async function handleTddStatus(
   ctx.ui.notify(
     `TDD enforcer ${enabledStr}\n` +
     `Current phase: ${phaseStr}\n` +
-    `Test files: ${redGlobs}\n` +
-    `Impl files: ${greenGlobs}\n` +
+    `Blocked in RED: ${redBlk}\n` +
+    `Blocked in GREEN: ${greenBlk}\n` +
     `Test commands: ${commands}`,
     "info",
   );

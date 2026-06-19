@@ -5,8 +5,8 @@ import type { NextPhaseDeps, PreviousPhaseDeps, TddStatusDeps } from "./tools.js
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
 const CONFIG = {
-  allowedRedPhaseFiles: ["tests/**/*.test.ts"],
-  allowedGreenPhaseFiles: ["src/**/*.ts"],
+  blockedInRed: ["tests/**/*.test.ts"],
+  blockedInGreen: ["src/**/*.ts"],
   testCommands: ["npm test"],
   timeoutSeconds: 30,
 };

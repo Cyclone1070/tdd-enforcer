@@ -33,8 +33,8 @@ function makeRunner(passed: boolean): TestRunner {
 }
 
 const testConfig: Config = {
-  allowedRedPhaseFiles: [],
-  allowedGreenPhaseFiles: [],
+  blockedInRed: [],
+  blockedInGreen: [],
   testCommands: ["npm test"],
   timeoutSeconds: 30,
 };
@@ -124,8 +124,8 @@ describe("checkGate", () => {
 // ── Pure unit tests: getDisallowedChanges ────────────────────────────────────
 
 const denyConfig: Config = {
-  allowedRedPhaseFiles: ["tests/**/*.test.ts"],
-  allowedGreenPhaseFiles: ["src/**/*.ts"],
+  blockedInRed: ["src/**/*.ts"],
+  blockedInGreen: ["tests/**/*.test.ts"],
   testCommands: [],
   timeoutSeconds: 30,
 };
@@ -163,11 +163,10 @@ describe("getDisallowedChanges", () => {
 
   it("returns disallowed files in red phase", () => {
     mockChangesSinceSnapshot.mockReturnValue(["src/main.ts", "tests/foo.test.ts", "README.md"]);
-    const matchesRed = picomatch(denyConfig.allowedRedPhaseFiles);
-    const matchesGreen = picomatch(denyConfig.allowedGreenPhaseFiles);
+    const matchBlockedInRed = picomatch(denyConfig.blockedInRed);
     mockDisallowedFiles.mockImplementation((changed: string[], phase: string) => {
       if (phase === "red") {
-        return changed.filter((f: string) => !matchesRed(f) && matchesGreen(f));
+        return changed.filter((f: string) => matchBlockedInRed(f));
       }
       return [];
     });
@@ -179,11 +178,10 @@ describe("getDisallowedChanges", () => {
 
   it("returns disallowed files in green phase", () => {
     mockChangesSinceSnapshot.mockReturnValue(["tests/foo.test.ts", "src/main.ts", "package.json"]);
-    const matchesRed = picomatch(denyConfig.allowedRedPhaseFiles);
-    const matchesGreen = picomatch(denyConfig.allowedGreenPhaseFiles);
+    const matchBlockedInGreen = picomatch(denyConfig.blockedInGreen);
     mockDisallowedFiles.mockImplementation((changed: string[], phase: string) => {
       if (phase === "green") {
-        return changed.filter((f: string) => matchesRed(f) && !matchesGreen(f));
+        return changed.filter((f: string) => matchBlockedInGreen(f));
       }
       return [];
     });
@@ -195,11 +193,10 @@ describe("getDisallowedChanges", () => {
 
   it("catches untracked files, not just modified", () => {
     mockChangesSinceSnapshot.mockReturnValue(["src/new.ts"]);
-    const matchesRed = picomatch(denyConfig.allowedRedPhaseFiles);
-    const matchesGreen = picomatch(denyConfig.allowedGreenPhaseFiles);
+    const matchBlockedInRed = picomatch(denyConfig.blockedInRed);
     mockDisallowedFiles.mockImplementation((changed: string[], phase: string) => {
       if (phase === "red") {
-        return changed.filter((f: string) => !matchesRed(f) && matchesGreen(f));
+        return changed.filter((f: string) => matchBlockedInRed(f));
       }
       return [];
     });

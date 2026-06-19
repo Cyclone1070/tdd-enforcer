@@ -28,8 +28,8 @@ describe("loadConfig", () => {
       writeFileSync(
         join(tddDir, "rules.json"),
         JSON.stringify({
-          allowedRedPhaseFiles: ["tests/**/*.test.ts"],
-          allowedGreenPhaseFiles: ["src/**/*.ts"],
+          blockedInRed: ["tests/**/*.test.ts"],
+          blockedInGreen: ["src/**/*.ts"],
           testCommands: ["npm run test"],
           timeoutSeconds: 60,
         }),
@@ -37,7 +37,7 @@ describe("loadConfig", () => {
       );
 
       const config = loadConfig(dir);
-      expect(config.allowedRedPhaseFiles).toEqual(["tests/**/*.test.ts"]);
+      expect(config.blockedInRed).toEqual(["tests/**/*.test.ts"]);
       expect(config.timeoutSeconds).toBe(60);
     });
   });
@@ -49,8 +49,8 @@ describe("loadConfig", () => {
       writeFileSync(
         join(tddDir, "rules.json"),
         JSON.stringify({
-          allowedRedPhaseFiles: ["tests/**/*.test.ts"],
-          allowedGreenPhaseFiles: ["src/**/*.ts"],
+          blockedInRed: ["tests/**/*.test.ts"],
+          blockedInGreen: ["src/**/*.ts"],
           testCommands: ["npm run test:unit", "npm run test:integration"],
         }),
         "utf-8",
@@ -62,15 +62,15 @@ describe("loadConfig", () => {
   });
 
   describe("validation — throws on invalid content", () => {
-    it("throws when allowedRedPhaseFiles is not an array", () => {
+    it("throws when blockedInRed is not an array", () => {
       withTempDir((dir) => {
         const tddDir = join(dir, ".pi", "tdd");
         mkdirSync(tddDir, { recursive: true });
         writeFileSync(
           join(tddDir, "rules.json"),
           JSON.stringify({
-            allowedRedPhaseFiles: "not-an-array",
-            allowedGreenPhaseFiles: ["src/**/*.ts"],
+            blockedInRed: "not-an-array",
+            blockedInGreen: ["src/**/*.ts"],
             testCommands: ["npm test"],
           }),
           "utf-8",
@@ -79,15 +79,15 @@ describe("loadConfig", () => {
       });
     });
 
-    it("throws when allowedGreenPhaseFiles is not an array", () => {
+    it("throws when blockedInGreen is not an array", () => {
       withTempDir((dir) => {
         const tddDir = join(dir, ".pi", "tdd");
         mkdirSync(tddDir, { recursive: true });
         writeFileSync(
           join(tddDir, "rules.json"),
           JSON.stringify({
-            allowedRedPhaseFiles: ["tests/**/*.test.ts"],
-            allowedGreenPhaseFiles: null,
+            blockedInRed: ["tests/**/*.test.ts"],
+            blockedInGreen: null,
             testCommands: ["npm test"],
           }),
           "utf-8",
@@ -103,8 +103,8 @@ describe("loadConfig", () => {
         writeFileSync(
           join(tddDir, "rules.json"),
           JSON.stringify({
-            allowedRedPhaseFiles: ["tests/**/*.test.ts"],
-            allowedGreenPhaseFiles: ["src/**/*.ts"],
+            blockedInRed: ["tests/**/*.test.ts"],
+            blockedInGreen: ["src/**/*.ts"],
             testCommands: "npm test",
           }),
           "utf-8",
@@ -122,15 +122,15 @@ describe("loadConfig", () => {
       });
     });
 
-    it("throws when allowedRedPhaseFiles is empty", () => {
+    it("throws when blockedInRed is empty", () => {
       withTempDir((dir) => {
         const tddDir = join(dir, ".pi", "tdd");
         mkdirSync(tddDir, { recursive: true });
         writeFileSync(
           join(tddDir, "rules.json"),
           JSON.stringify({
-            allowedRedPhaseFiles: [],
-            allowedGreenPhaseFiles: ["src/**/*.ts"],
+            blockedInRed: [],
+            blockedInGreen: ["src/**/*.ts"],
             testCommands: ["npm test"],
           }),
           "utf-8",
@@ -139,15 +139,15 @@ describe("loadConfig", () => {
       });
     });
 
-    it("throws when allowedGreenPhaseFiles is empty", () => {
+    it("throws when blockedInGreen is empty", () => {
       withTempDir((dir) => {
         const tddDir = join(dir, ".pi", "tdd");
         mkdirSync(tddDir, { recursive: true });
         writeFileSync(
           join(tddDir, "rules.json"),
           JSON.stringify({
-            allowedRedPhaseFiles: ["tests/**/*.test.ts"],
-            allowedGreenPhaseFiles: [],
+            blockedInRed: ["tests/**/*.test.ts"],
+            blockedInGreen: [],
             testCommands: ["npm test"],
           }),
           "utf-8",
@@ -163,8 +163,8 @@ describe("loadConfig", () => {
         writeFileSync(
           join(tddDir, "rules.json"),
           JSON.stringify({
-            allowedRedPhaseFiles: ["tests/**/*.test.ts"],
-            allowedGreenPhaseFiles: ["src/**/*.ts"],
+            blockedInRed: ["tests/**/*.test.ts"],
+            blockedInGreen: ["src/**/*.ts"],
             testCommands: [],
           }),
           "utf-8",

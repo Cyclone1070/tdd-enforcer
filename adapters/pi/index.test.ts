@@ -2,8 +2,8 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { handleTddOn, handleTddOff, handleTddStatus, handleTddReset } from "./index.js";
 
 const config = {
-  allowedRedPhaseFiles: ["tests/**/*.test.ts"],
-  allowedGreenPhaseFiles: ["src/**/*.ts"],
+  blockedInRed: ["tests/**/*.test.ts"],
+  blockedInGreen: ["src/**/*.ts"],
   testCommands: ["npm test"],
   timeoutSeconds: 30,
 };
