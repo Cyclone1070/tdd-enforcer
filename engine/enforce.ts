@@ -1,5 +1,5 @@
 import picomatch from "picomatch";
-import type { Phase, Config } from "./types.js";
+import type { Config, Phase } from "./types.js";
 
 /**
  * Match a file path against a list of glob patterns with !exclusion support.
@@ -10,24 +10,24 @@ import type { Phase, Config } from "./types.js";
  * Empty pattern list = no match.
  */
 function matchPatterns(patterns: string[], filePath: string): boolean {
-  const positive: string[] = [];
-  const negative: string[] = [];
+	const positive: string[] = [];
+	const negative: string[] = [];
 
-  for (const p of patterns) {
-    if (p.startsWith("!")) {
-      negative.push(p.slice(1));
-    } else {
-      positive.push(p);
-    }
-  }
+	for (const p of patterns) {
+		if (p.startsWith("!")) {
+			negative.push(p.slice(1));
+		} else {
+			positive.push(p);
+		}
+	}
 
-  if (positive.length === 0) return false;
+	if (positive.length === 0) return false;
 
-  const matchesPositive = positive.some((p) => picomatch(p)(filePath));
-  if (!matchesPositive) return false;
+	const matchesPositive = positive.some((p) => picomatch(p)(filePath));
+	if (!matchesPositive) return false;
 
-  const matchesNegative = negative.some((p) => picomatch(p)(filePath));
-  return !matchesNegative;
+	const matchesNegative = negative.some((p) => picomatch(p)(filePath));
+	return !matchesNegative;
 }
 
 /**
@@ -39,17 +39,25 @@ function matchPatterns(patterns: string[], filePath: string): boolean {
  * - GREEN: files in blockedInGreen are blocked, everything else is free
  * - ! negation patterns exclude subsets from a block list
  */
-export function isAllowed(filePath: string, phase: Phase, config: Config): boolean {
-  if (phase === "refactor") return true;
+export function isAllowed(
+	filePath: string,
+	phase: Phase,
+	config: Config,
+): boolean {
+	if (phase === "refactor") return true;
 
-  const blocked = phase === "red" ? config.blockedInRed : config.blockedInGreen;
-  return !matchPatterns(blocked, filePath);
+	const blocked = phase === "red" ? config.blockedInRed : config.blockedInGreen;
+	return !matchPatterns(blocked, filePath);
 }
 
 /**
  * Filter a list of file paths to those that are disallowed in the current phase.
  */
-export function disallowedFiles(files: string[], phase: Phase, config: Config): string[] {
-  if (phase === "refactor") return [];
-  return files.filter((f) => !isAllowed(f, phase, config));
+export function disallowedFiles(
+	files: string[],
+	phase: Phase,
+	config: Config,
+): string[] {
+	if (phase === "refactor") return [];
+	return files.filter((f) => !isAllowed(f, phase, config));
 }
