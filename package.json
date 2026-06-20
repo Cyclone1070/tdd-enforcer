@@ -1,32 +1,32 @@
 {
-    "name": "tdd-enforcer",
-    "version": "0.2.8",
-    "type": "module",
-    "scripts": {
-        "fmt": "biome format --write .",
-        "lint": "biome check .",
-        "lint:fix": "biome check --write .",
-        "test": "vitest run"
-    },
-    "keywords": [
-        "pi-package"
-    ],
-    "dependencies": {
-        "picomatch": "^4.0.4"
-    },
-    "devDependencies": {
-        "@biomejs/biome": "^2.5.0",
-        "@earendil-works/pi-coding-agent": "^0.79.6",
-        "@types/node": "^25.9.3",
-        "typebox": "^1.2.16",
-        "vitest": "^3"
-    },
-    "pi": {
-        "extensions": [
-            "./adapters/pi/index.ts"
-        ],
-        "skills": [
-            "./skills"
-        ]
-    }
+	"name": "tdd-enforcer",
+	"version": "0.2.8",
+	"type": "module",
+	"scripts": {
+		"fmt": "biome format --write .",
+		"lint": "biome check .",
+		"lint:fix": "biome check --write .",
+		"test": "vitest run"
+	},
+	"keywords": [
+		"pi-package"
+	],
+	"dependencies": {
+		"picomatch": "^4.0.4"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "^2.5.0",
+		"@earendil-works/pi-coding-agent": "^0.79.6",
+		"@types/node": "^25.9.3",
+		"typebox": "^1.2.16",
+		"vitest": "^3"
+	},
+	"pi": {
+		"extensions": [
+			"./adapters/pi/index.ts"
+		],
+		"skills": [
+			"./skills"
+		]
+	}
 }
