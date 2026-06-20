@@ -178,7 +178,7 @@ export async function executeNextPhase(
 	deps.tddLog(tddDir, "INFO", "next_tdd_phase: complete", { from, to });
 
 	return {
-		content: [{ type: "text", text: deps.getNudgePrompt(to, config) }],
+		content: [{ type: "text", text: `\n${deps.getNudgePrompt(to, config)}` }],
 		details: {},
 	};
 }
@@ -266,7 +266,7 @@ export async function executePreviousPhase(
 		content: [
 			{
 				type: "text",
-				text: `Reverted to ${prevPhase.toUpperCase()}. Working tree has the previous snapshot content as unstaged changes.`,
+				text: `\nReverted to ${prevPhase.toUpperCase()}. Working tree has the previous snapshot content as unstaged changes.`,
 			},
 		],
 		details: {},
@@ -312,7 +312,7 @@ export async function executeTddStatus(
 			{
 				type: "text",
 				text:
-					`TDD enforcer enabled\n` +
+					`\nTDD enforcer enabled\n` +
 					`Current phase: ${phaseStr}\n` +
 					`Blocked in RED: ${redBlk}\n` +
 					`Blocked in GREEN: ${greenBlk}\n` +

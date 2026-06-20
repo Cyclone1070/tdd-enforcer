@@ -137,6 +137,21 @@ describe("executeNextPhase", () => {
 		).rejects.toThrow("failed");
 	});
 
+	it("result text has leading newline for spacing", async () => {
+		mockLoadTddState.mockReturnValue({
+			ok: true,
+			state: { enabled: true, current: "red" },
+			config: CONFIG,
+		});
+		mockCheckGate.mockResolvedValue({
+			passed: true,
+			message: "Tests fail — proceed to GREEN.",
+		});
+		mockGetNudgePrompt.mockReturnValue("content");
+		const result = await executeNextPhase({ cwd: "/test" } as any, makeDeps());
+		expect(result.content[0].text.startsWith("\n")).toBe(true);
+	});
+
 	it("advances red→green when tests fail", async () => {
 		mockLoadTddState.mockReturnValue({
 			ok: true,
