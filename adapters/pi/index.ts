@@ -148,6 +148,25 @@ export async function handleTddStatus(
 	);
 }
 
+export async function handleBeforeAgentStart(
+	event: {
+		systemPromptOptions: { promptGuidelines: string[] };
+	},
+	ctx: { cwd: string },
+	deps: {
+		loadTddState: typeof loadTddState;
+	},
+): Promise<void> {
+	const tdd = deps.loadTddState(ctx.cwd);
+	if (!tdd.ok || !tdd.state.enabled) return;
+
+	event.systemPromptOptions.promptGuidelines.push(
+		"You are working under TDD enforcement. Each phase restricts which files you can modify — locked files will be blocked automatically.",
+		"Use `next_tdd_phase` to advance through the cycle, `previous_tdd_phase` to revert a phase, `tdd_status` to check current phase and blocked file rules.",
+		"Minimise the scope of each TDD cycle so reverting is cheap.",
+	);
+}
+
 export async function handleTddJump(
 	phase: "red" | "green" | "refactor",
 	ctx: ExtensionContext,
@@ -303,4 +322,8 @@ export default function (pi: ExtensionAPI) {
 
 	registerTools(pi);
 	registerHooks(pi);
+
+	pi.on("before_agent_start", (event, ctx) =>
+		handleBeforeAgentStart(event, ctx, { loadTddState }),
+	);
 }

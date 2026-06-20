@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+	handleBeforeAgentStart,
 	handleTddJump,
 	handleTddOff,
 	handleTddOn,
@@ -414,5 +415,92 @@ describe("handleTddJump", () => {
 			current: "red",
 		});
 		expect(ctx.notifications[0].message).toContain("Skipped to RED phase");
+	});
+});
+
+// ── handleBeforeAgentStart ──────────────────────────────────────────────────
+
+describe("handleBeforeAgentStart", () => {
+	let mockLoadTddState: ReturnType<typeof vi.fn>;
+
+	function makeDeps(overrides = {}) {
+		return {
+			loadTddState: mockLoadTddState,
+			...overrides,
+		};
+	}
+
+	function makeEvent(): {
+		systemPromptOptions: { promptGuidelines: string[] };
+	} {
+		return { systemPromptOptions: { promptGuidelines: [] } };
+	}
+
+	beforeEach(() => {
+		vi.clearAllMocks();
+		mockLoadTddState = vi.fn();
+	});
+
+	it("pushes guidelines when TDD enabled", async () => {
+		mockLoadTddState.mockReturnValue({
+			ok: true,
+			state: { enabled: true, current: "red" },
+			config: {
+				blockedInRed: [],
+				blockedInGreen: [],
+				testCommands: [],
+				timeoutSeconds: 30,
+			},
+		});
+		const event = makeEvent();
+		await handleBeforeAgentStart(
+			event as any,
+			{ cwd: "/test" } as any,
+			makeDeps(),
+		);
+		expect(event.systemPromptOptions.promptGuidelines).toHaveLength(3);
+		expect(event.systemPromptOptions.promptGuidelines[0]).toContain(
+			"locked files will be blocked",
+		);
+		expect(event.systemPromptOptions.promptGuidelines[1]).toContain(
+			"next_tdd_phase",
+		);
+		expect(event.systemPromptOptions.promptGuidelines[2]).toContain(
+			"cycle so reverting is cheap",
+		);
+	});
+
+	it("does not push guidelines when TDD not setup", async () => {
+		mockLoadTddState.mockReturnValue({
+			ok: false,
+			reason: "Missing .pi/tdd/",
+		});
+		const event = makeEvent();
+		await handleBeforeAgentStart(
+			event as any,
+			{ cwd: "/test" } as any,
+			makeDeps(),
+		);
+		expect(event.systemPromptOptions.promptGuidelines).toHaveLength(0);
+	});
+
+	it("does not push guidelines when TDD disabled", async () => {
+		mockLoadTddState.mockReturnValue({
+			ok: true,
+			state: { enabled: false, current: "red" },
+			config: {
+				blockedInRed: [],
+				blockedInGreen: [],
+				testCommands: [],
+				timeoutSeconds: 30,
+			},
+		});
+		const event = makeEvent();
+		await handleBeforeAgentStart(
+			event as any,
+			{ cwd: "/test" } as any,
+			makeDeps(),
+		);
+		expect(event.systemPromptOptions.promptGuidelines).toHaveLength(0);
 	});
 });
