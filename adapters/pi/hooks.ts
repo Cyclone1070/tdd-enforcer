@@ -120,7 +120,7 @@ export async function handleToolCall(
 		return {
 			block: true,
 			reason:
-				"TDD: Config files are locked. No bypassing TDD allowed. If bypassing is justified, ask the user: turn TDD off (/tdd:off), reset (/tdd:reset), or change phase via /tdd commands.",
+				"TDD: Config files are locked. No bypassing TDD allowed. If bypassing is justified, ask the user: turn TDD off (/tdd:off), reset (/tdd:reset), or change phase via /tdd commands.\n\nIf TDD reverts too much of your progress, reduce the scope of each TDD cycle to minimise lost progress.",
 		};
 	}
 
@@ -267,6 +267,9 @@ function formatWarning(
 		.join("");
 	let warning = `\n\n⛔ ${phase.toUpperCase()}: reverted locked files modified by bash:`;
 	for (const f of cmdViolations) warning += `\n  - ${f}`;
+	if (cmdViolations.some((f) => f.startsWith(".pi/tdd/"))) {
+		warning += `\n\nIf TDD reverts too much of your progress, reduce the scope of each TDD cycle to minimise lost progress.`;
+	}
 	if (cmdAllowed.length > 0) {
 		warning += `\n\nAllowed changes retained:`;
 		for (const f of cmdAllowed) warning += `\n  - ${f}`;

@@ -54,7 +54,7 @@ It locks files per phase — only test files in RED, only implementation files i
 ### RED
 Files matching `blockedInRed` are locked — everything else is free.
 
-Write failing tests for one feature at a time. Think about what could go wrong and test for it — don't just verify the happy path, cover unhappy paths and edge cases too. Keep cycles small so reverting is cheap and safe if assumptions turn out wrong.
+Write failing tests for one feature at a time. Think about what could go wrong and test for it — don't just verify the happy path, cover unhappy paths and edge cases too. Minimise the scope of each TDD cycle so reverting is cheap and safe if assumptions turn out wrong.
 
 Call `next_tdd_phase` once tests fail.
 
