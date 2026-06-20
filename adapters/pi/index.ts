@@ -148,6 +148,58 @@ export async function handleTddStatus(
 	);
 }
 
+export async function handleTddJump(
+	phase: "red" | "green" | "refactor",
+	ctx: ExtensionContext,
+	deps: {
+		loadTddState: typeof loadTddState;
+		snapshot: typeof snapshot;
+		savePhaseState: typeof savePhaseState;
+		tddLog: typeof tddLog;
+	} = {
+		loadTddState,
+		snapshot,
+		savePhaseState,
+		tddLog,
+	},
+): Promise<void> {
+	const root = ctx.cwd;
+	const tddDir = join(root, ".pi", "tdd");
+
+	const setup = deps.loadTddState(root);
+	if (!setup.ok) {
+		deps.tddLog(tddDir, "WARN", `tdd:${phase}: setup invalid`, {
+			reason: setup.reason,
+		});
+		ctx.ui.notify(setup.reason, "error");
+		return;
+	}
+
+	const { state } = setup;
+
+	if (state.current === phase) {
+		deps.tddLog(tddDir, "INFO", `tdd:${phase}: already in ${phase}`, {
+			phase,
+		});
+		ctx.ui.notify(`TDD: already in ${phase.toUpperCase()} phase.`, "info");
+		return;
+	}
+
+	// Snapshot the current phase's work before jumping
+	deps.snapshot(root, state.current);
+	deps.tddLog(tddDir, "INFO", `tdd:${phase}: snapshot taken`, {
+		from: state.current,
+	});
+
+	// Auto-enable if disabled, set phase
+	state.enabled = true;
+	state.current = phase;
+	deps.savePhaseState(root, state);
+
+	deps.tddLog(tddDir, "INFO", `tdd:${phase}: jumped`);
+	ctx.ui.notify(`Skipped to ${phase.toUpperCase()} phase.`, "info");
+}
+
 export async function handleTddReset(
 	ctx: ExtensionContext,
 	deps: {
@@ -238,6 +290,16 @@ export default function (pi: ExtensionAPI) {
 		handler: (_args: string, ctx: ExtensionContext) =>
 			handleTddReset(ctx, { ...defaultDeps, resetGit }),
 	});
+
+	for (const phase of ["red", "green", "refactor"] as const) {
+		pi.registerCommand(`tdd:${phase}`, {
+			description:
+				`Skip to ${phase.toUpperCase()} phase. ` +
+				"Snapshot working tree, auto-enable TDD, set phase. No gate checks.",
+			handler: (_args: string, ctx: ExtensionContext) =>
+				handleTddJump(phase, ctx, defaultDeps),
+		});
+	}
 
 	registerTools(pi);
 	registerHooks(pi);

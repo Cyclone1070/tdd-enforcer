@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+	handleTddJump,
 	handleTddOff,
 	handleTddOn,
 	handleTddReset,
@@ -308,5 +309,110 @@ describe("handleTddReset", () => {
 		expect(ctx.notifications).toHaveLength(1);
 		expect(ctx.notifications[0].message).toContain("Missing .pi/tdd/");
 		expect(ctx.notifications[0].type).toBe("error");
+	});
+});
+
+// ── handleTddJump ───────────────────────────────────────────────────────────
+
+describe("handleTddJump", () => {
+	let mockLoadTddState: ReturnType<typeof vi.fn>;
+	let mockSnapshot: ReturnType<typeof vi.fn>;
+	let mockSavePhaseState: ReturnType<typeof vi.fn>;
+	let mockTddLog: ReturnType<typeof vi.fn>;
+
+	function makeDeps(overrides = {}) {
+		return {
+			loadTddState: mockLoadTddState,
+			snapshot: mockSnapshot,
+			savePhaseState: mockSavePhaseState,
+			tddLog: mockTddLog,
+			...overrides,
+		};
+	}
+
+	beforeEach(() => {
+		vi.clearAllMocks();
+		mockLoadTddState = vi.fn();
+		mockSnapshot = vi.fn().mockReturnValue("snap123");
+		mockSavePhaseState = vi.fn();
+		mockTddLog = vi.fn();
+	});
+
+	function tddOk(overrides?: { current?: string; enabled?: boolean }) {
+		return {
+			ok: true as const,
+			state: {
+				enabled: overrides?.enabled ?? true,
+				current: overrides?.current ?? "red",
+			},
+			config,
+		};
+	}
+
+	it("shows error when TDD not setup", async () => {
+		mockLoadTddState.mockReturnValue({ ok: false, reason: "Missing .pi/tdd/" });
+		const ctx = makeCtx();
+		await handleTddJump("green", ctx, makeDeps());
+		expect(ctx.notifications[0].message).toContain("Missing");
+		expect(ctx.notifications[0].type).toBe("error");
+		expect(mockSavePhaseState).not.toHaveBeenCalled();
+	});
+
+	it("notifies no-op when already in target phase", async () => {
+		mockLoadTddState.mockReturnValue(tddOk({ current: "green" }));
+		const ctx = makeCtx();
+		await handleTddJump("green", ctx, makeDeps());
+		expect(ctx.notifications[0].message).toContain("already in GREEN");
+		expect(ctx.notifications[0].type).toBe("info");
+		expect(mockSnapshot).not.toHaveBeenCalled();
+		expect(mockSavePhaseState).not.toHaveBeenCalled();
+	});
+
+	it("snapshots, auto-enables, jumps phase, notifies", async () => {
+		mockLoadTddState.mockReturnValue(tddOk({ current: "red", enabled: true }));
+		const ctx = makeCtx();
+		await handleTddJump("green", ctx, makeDeps());
+
+		expect(mockSnapshot).toHaveBeenCalledWith("/test", "red");
+		expect(mockSavePhaseState).toHaveBeenCalledWith("/test", {
+			enabled: true,
+			current: "green",
+		});
+		expect(ctx.notifications[0].message).toContain("Skipped to GREEN phase");
+		expect(ctx.notifications[0].type).toBe("info");
+	});
+
+	it("auto-enables when TDD disabled", async () => {
+		mockLoadTddState.mockReturnValue(tddOk({ current: "red", enabled: false }));
+		const ctx = makeCtx();
+		await handleTddJump("green", ctx, makeDeps());
+
+		expect(mockSavePhaseState).toHaveBeenCalledWith("/test", {
+			enabled: true,
+			current: "green",
+		});
+		expect(ctx.notifications[0].message).toContain("Skipped to GREEN phase");
+	});
+
+	it("works for refactor from green", async () => {
+		mockLoadTddState.mockReturnValue(tddOk({ current: "green" }));
+		const ctx = makeCtx();
+		await handleTddJump("refactor", ctx, makeDeps());
+		expect(mockSavePhaseState).toHaveBeenCalledWith("/test", {
+			enabled: true,
+			current: "refactor",
+		});
+		expect(ctx.notifications[0].message).toContain("Skipped to REFACTOR phase");
+	});
+
+	it("works for red from green", async () => {
+		mockLoadTddState.mockReturnValue(tddOk({ current: "green" }));
+		const ctx = makeCtx();
+		await handleTddJump("red", ctx, makeDeps());
+		expect(mockSavePhaseState).toHaveBeenCalledWith("/test", {
+			enabled: true,
+			current: "red",
+		});
+		expect(ctx.notifications[0].message).toContain("Skipped to RED phase");
 	});
 });
