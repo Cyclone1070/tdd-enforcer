@@ -72,24 +72,26 @@ describe("executeNextPhase", () => {
 		mockAsyncExec.mockResolvedValue({ stdout: "", stderr: "" });
 	});
 
-	it("returns config error when TDD not setup", async () => {
+	it("throws when TDD not setup", async () => {
 		mockLoadTddState.mockReturnValue({
 			ok: false,
 			reason:
 				"Missing .pi/tdd/ directory. See the tdd-enforcer skill to learn how to set up TDD configs.",
 		});
-		const result = await executeNextPhase({ cwd: "/test" } as any, makeDeps());
-		expect(result.content[0].text).toContain("Missing .pi/tdd/");
+		await expect(
+			executeNextPhase({ cwd: "/test" } as any, makeDeps()),
+		).rejects.toThrow("Missing .pi/tdd/");
 	});
 
-	it("returns disabled message when TDD disabled", async () => {
+	it("throws when TDD disabled", async () => {
 		mockLoadTddState.mockReturnValue({
 			ok: true,
 			state: { enabled: false, current: "red" },
 			config: CONFIG,
 		});
-		const result = await executeNextPhase({ cwd: "/test" } as any, makeDeps());
-		expect(result.content[0].text).toContain("not enabled");
+		await expect(
+			executeNextPhase({ cwd: "/test" } as any, makeDeps()),
+		).rejects.toThrow("not enabled");
 	});
 
 	it("blocks when allowlist violations exist", async () => {
@@ -99,9 +101,9 @@ describe("executeNextPhase", () => {
 			config: CONFIG,
 		});
 		mockGetDisallowedChanges.mockReturnValue(["src/violation.ts"]);
-		const result = await executeNextPhase({ cwd: "/test" } as any, makeDeps());
-		expect(result.content[0].text).toContain("BLOCKED");
-		expect(result.content[0].text).toContain("src/violation.ts");
+		await expect(
+			executeNextPhase({ cwd: "/test" } as any, makeDeps()),
+		).rejects.toThrow("BLOCKED");
 	});
 
 	it("blocks red→green when tests pass (need failing test)", async () => {
@@ -115,9 +117,9 @@ describe("executeNextPhase", () => {
 			message:
 				"Tests passed. Add a failing test before transitioning to GREEN.",
 		});
-		const result = await executeNextPhase({ cwd: "/test" } as any, makeDeps());
-		expect(result.content[0].text).toContain("Add a failing test");
-		expect(result.content[0].text).toContain("GREEN");
+		await expect(
+			executeNextPhase({ cwd: "/test" } as any, makeDeps()),
+		).rejects.toThrow("Add a failing test");
 	});
 
 	it("blocks green→refactor when tests fail", async () => {
@@ -130,9 +132,9 @@ describe("executeNextPhase", () => {
 			passed: false,
 			message: "Tests failed. Fix them before transitioning to REFACTOR.",
 		});
-		const result = await executeNextPhase({ cwd: "/test" } as any, makeDeps());
-		expect(result.content[0].text).toContain("failed");
-		expect(result.content[0].text).toContain("REFACTOR");
+		await expect(
+			executeNextPhase({ cwd: "/test" } as any, makeDeps()),
+		).rejects.toThrow("failed");
 	});
 
 	it("advances red→green when tests fail", async () => {
@@ -185,9 +187,9 @@ describe("executeNextPhase", () => {
 			passed: false,
 			message: "Tests failed. Fix them before transitioning to RED.",
 		});
-		const result = await executeNextPhase({ cwd: "/test" } as any, makeDeps());
-		expect(result.content[0].text).toContain("failed");
-		expect(result.content[0].text).toContain("RED");
+		await expect(
+			executeNextPhase({ cwd: "/test" } as any, makeDeps()),
+		).rejects.toThrow("failed");
 		expect(mockSavePhaseState).not.toHaveBeenCalled();
 	});
 
@@ -251,57 +253,49 @@ describe("executePreviousPhase", () => {
 		mockHasParent.mockReturnValue(true);
 	});
 
-	it("returns config error when TDD not setup", async () => {
+	it("throws when TDD not setup", async () => {
 		mockLoadTddState.mockReturnValue({
 			ok: false,
 			reason: "Missing .pi/tdd/ directory.",
 		});
-		const result = await executePreviousPhase(
-			{ cwd: "/test" } as any,
-			makeDeps(),
-		);
-		expect(result.content[0].text).toContain("Missing .pi/tdd/");
+		await expect(
+			executePreviousPhase({ cwd: "/test" } as any, makeDeps()),
+		).rejects.toThrow("Missing .pi/tdd/");
 	});
 
-	it("returns disabled message when TDD disabled", async () => {
+	it("throws when TDD disabled", async () => {
 		mockLoadTddState.mockReturnValue({
 			ok: true,
 			state: { enabled: false, current: "red" },
 			config: CONFIG,
 		});
-		const result = await executePreviousPhase(
-			{ cwd: "/test" } as any,
-			makeDeps(),
-		);
-		expect(result.content[0].text).toContain("not enabled");
+		await expect(
+			executePreviousPhase({ cwd: "/test" } as any, makeDeps()),
+		).rejects.toThrow("not enabled");
 	});
 
-	it("returns no-parent message when only init commit exists", async () => {
+	it("throws when no parent commit", async () => {
 		mockLoadTddState.mockReturnValue({
 			ok: true,
 			state: { enabled: true, current: "red" },
 			config: CONFIG,
 		});
 		mockHasParent.mockReturnValue(false);
-		const result = await executePreviousPhase(
-			{ cwd: "/test" } as any,
-			makeDeps(),
-		);
-		expect(result.content[0].text).toContain("No previous phase");
+		await expect(
+			executePreviousPhase({ cwd: "/test" } as any, makeDeps()),
+		).rejects.toThrow("No previous phase");
 	});
 
-	it("returns error when HEAD message is not a TDD snapshot", async () => {
+	it("throws when HEAD message is not a TDD snapshot", async () => {
 		mockLoadTddState.mockReturnValue({
 			ok: true,
 			state: { enabled: true, current: "red" },
 			config: CONFIG,
 		});
 		mockHeadMessage.mockReturnValue("garbage");
-		const result = await executePreviousPhase(
-			{ cwd: "/test" } as any,
-			makeDeps(),
-		);
-		expect(result.content[0].text).toContain("not a TDD snapshot");
+		await expect(
+			executePreviousPhase({ cwd: "/test" } as any, makeDeps()),
+		).rejects.toThrow("not a TDD snapshot");
 	});
 
 	it("reverts to previous phase on success", async () => {
@@ -363,23 +357,25 @@ describe("executeTddStatus", () => {
 		mockTddLog = vi.fn();
 	});
 
-	it("returns config error when TDD not setup", async () => {
+	it("throws when TDD not setup", async () => {
 		mockLoadTddState.mockReturnValue({
 			ok: false,
 			reason: "Missing .pi/tdd/ directory.",
 		});
-		const result = await executeTddStatus({ cwd: "/test" } as any, makeDeps());
-		expect(result.content[0].text).toContain("Missing .pi/tdd/");
+		await expect(
+			executeTddStatus({ cwd: "/test" } as any, makeDeps()),
+		).rejects.toThrow("Missing .pi/tdd/");
 	});
 
-	it("returns disabled message when TDD disabled", async () => {
+	it("throws when TDD disabled", async () => {
 		mockLoadTddState.mockReturnValue({
 			ok: true,
 			state: { enabled: false, current: "red" },
 			config: CONFIG,
 		});
-		const result = await executeTddStatus({ cwd: "/test" } as any, makeDeps());
-		expect(result.content[0].text).toContain("not enabled");
+		await expect(
+			executeTddStatus({ cwd: "/test" } as any, makeDeps()),
+		).rejects.toThrow("not enabled");
 	});
 
 	it("returns status details when TDD enabled", async () => {

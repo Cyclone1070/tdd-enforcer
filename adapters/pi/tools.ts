@@ -102,19 +102,11 @@ export async function executeNextPhase(
 		deps.tddLog(tddDir, "WARN", "next_tdd_phase: TDD not active", {
 			reason: tdd.reason,
 		});
-		return {
-			content: [{ type: "text", text: `TDD: ${tdd.reason}` }],
-			details: {},
-		};
+		throw new Error(`TDD: ${tdd.reason}`);
 	}
 	if (!tdd.state.enabled) {
 		deps.tddLog(tddDir, "WARN", "next_tdd_phase: TDD disabled");
-		return {
-			content: [
-				{ type: "text", text: "TDD is not enabled. Run /tdd:on to enable it." },
-			],
-			details: {},
-		};
+		throw new Error("TDD is not enabled. Run /tdd:on to enable it.");
 	}
 
 	const { state, config } = tdd;
@@ -130,18 +122,11 @@ export async function executeNextPhase(
 			from,
 			violations,
 		});
-		return {
-			content: [
-				{
-					type: "text",
-					text:
-						`BLOCKED: files not allowed in ${from.toUpperCase()} phase:\n` +
-						violations.map((f) => `  - ${f}`).join("\n") +
-						`\nRevert or remove them before proceeding.\n\nInspect with: cd .pi/tdd && git diff HEAD -- ${violations[0]}`,
-				},
-			],
-			details: {},
-		};
+		throw new Error(
+			`BLOCKED: files not allowed in ${from.toUpperCase()} phase:\n` +
+				violations.map((f) => `  - ${f}`).join("\n") +
+				`\nRevert or remove them before proceeding.\n\nInspect with: cd .pi/tdd && git diff HEAD -- ${violations[0]}`,
+		);
 	}
 
 	// 2. Gate check
@@ -176,7 +161,7 @@ export async function executeNextPhase(
 	});
 
 	if (!gate.passed) {
-		return { content: [{ type: "text", text: gate.message }], details: {} };
+		throw new Error(gate.message);
 	}
 
 	// 3. Snapshot — label with the phase the work was done in
@@ -214,19 +199,11 @@ export async function executePreviousPhase(
 		deps.tddLog(tddDir, "WARN", "previous_tdd_phase: TDD not active", {
 			reason: tdd.reason,
 		});
-		return {
-			content: [{ type: "text", text: `TDD: ${tdd.reason}` }],
-			details: {},
-		};
+		throw new Error(`TDD: ${tdd.reason}`);
 	}
 	if (!tdd.state.enabled) {
 		deps.tddLog(tddDir, "WARN", "previous_tdd_phase: TDD disabled");
-		return {
-			content: [
-				{ type: "text", text: "TDD is not enabled. Run /tdd:on to enable it." },
-			],
-			details: {},
-		};
+		throw new Error("TDD is not enabled. Run /tdd:on to enable it.");
 	}
 
 	const { state } = tdd;
@@ -235,10 +212,7 @@ export async function executePreviousPhase(
 		deps.tddLog(tddDir, "WARN", "previous_tdd_phase: no parent commit", {
 			phase: state.current,
 		});
-		return {
-			content: [{ type: "text", text: "No previous phase to revert to." }],
-			details: {},
-		};
+		throw new Error("No previous phase to revert to.");
 	}
 
 	// Read phase from HEAD snapshot commit message (source of truth).
@@ -250,18 +224,11 @@ export async function executePreviousPhase(
 		deps.tddLog(tddDir, "ERROR", "previous_tdd_phase: invalid HEAD message", {
 			headMsg,
 		});
-		return {
-			content: [
-				{
-					type: "text",
-					text:
-						`HEAD commit "${headMsg}" is not a TDD snapshot. Cannot determine previous phase.\n` +
-						`The private git repo at .pi/tdd must not be manually modified. ` +
-						`Tampering with it will cause TDD state corruption.`,
-				},
-			],
-			details: {},
-		};
+		throw new Error(
+			`HEAD commit "${headMsg}" is not a TDD snapshot. Cannot determine previous phase.\n` +
+				`The private git repo at .pi/tdd must not be manually modified. ` +
+				`Tampering with it will cause TDD state corruption.`,
+		);
 	}
 	const label = phaseMatch[1];
 	if (label !== "red" && label !== "green" && label !== "refactor") {
@@ -269,15 +236,9 @@ export async function executePreviousPhase(
 			headMsg,
 			label,
 		});
-		return {
-			content: [
-				{
-					type: "text",
-					text: `HEAD commit "${headMsg}" has unexpected label. Cannot determine previous phase.`,
-				},
-			],
-			details: {},
-		};
+		throw new Error(
+			`HEAD commit "${headMsg}" has unexpected label. Cannot determine previous phase.`,
+		);
 	}
 	const prevPhase: Phase = label;
 	deps.tddLog(tddDir, "INFO", "previous_tdd_phase: reverting", {
@@ -329,19 +290,11 @@ export async function executeTddStatus(
 		deps.tddLog(tddDir, "WARN", "tdd_status: TDD not active", {
 			reason: result.reason,
 		});
-		return {
-			content: [{ type: "text", text: `TDD: ${result.reason}` }],
-			details: {},
-		};
+		throw new Error(`TDD: ${result.reason}`);
 	}
 	if (!result.state.enabled) {
 		deps.tddLog(tddDir, "WARN", "tdd_status: TDD disabled");
-		return {
-			content: [
-				{ type: "text", text: "TDD is not enabled. Run /tdd:on to enable it." },
-			],
-			details: {},
-		};
+		throw new Error("TDD is not enabled. Run /tdd:on to enable it.");
 	}
 
 	const { state, config } = result;

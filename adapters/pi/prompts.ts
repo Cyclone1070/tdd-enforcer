@@ -11,7 +11,8 @@ export function getNudgePrompt(phase: Phase, config: Config): string {
 				`Blocked files: ${redBlock}\n` +
 				"All other files are free to modify. Call `next_tdd_phase` to proceed to GREEN.\n" +
 				"Think about what could go wrong and test for it — don't just verify the happy path, " +
-				"cover unhappy paths and edge cases too. Keep cycles small so reverting is cheap."
+				"cover unhappy paths and edge cases too.\n" +
+				"Keep cycles small so reverting is cheap."
 			);
 		case "green":
 			return (
