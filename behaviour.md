@@ -44,9 +44,23 @@ After this gate, every surface has `state` + `config`. Then branches on `state.e
 | `tdd:off` | Setup valid? | If `disabled` → error "already off". Set `enabled: false`. |
 | `tdd:status` | Setup valid? | Show state + config regardless of `enabled`. |
 | `tdd:reset` | Setup valid? | Nuke private git, re-init, snapshot, set `enabled: false`. |
-| `tdd:red` / `tdd:green` / `tdd:refactor` | Setup valid? | If `disabled` → error "not enabled". Set `current` to target phase. |
+| `tdd:red` | Setup valid? | If already in RED → no-op. Snapshot working tree, auto-enable if disabled, set `current: "red"`. Notify "Skipped to RED phase". |
+| `tdd:green` | Setup valid? | If already in GREEN → no-op. Snapshot working tree, auto-enable if disabled, set `current: "green"`. Notify "Skipped to GREEN phase". |
+| `tdd:refactor` | Setup valid? | If already in REFACTOR → no-op. Snapshot working tree, auto-enable if disabled, set `current: "refactor"`. Notify "Skipped to REFACTOR phase". |
 
 All errors reference the tdd-enforcer skill.
+
+### Phase Jump Commands — Usage
+
+These let the user skip phases they don't need for small changes:
+
+| Scenario | Command | Why |
+|----------|---------|-----|
+| "This is just an implementation change, no test needed" | `/tdd:green` | Skip RED, go straight to GREEN. Test files stay locked, implementation files unlocked. |
+| "This is just cleanup, not new behaviour" | `/tdd:refactor` | Skip RED + GREEN. All files unlocked. |
+| "Done refactoring, start next cycle" | `/tdd:red` | Same as `next_tdd_phase` from REFACTOR but direct — no gate check needed. |
+
+Unlike `next_tdd_phase`, these commands do NOT run transition gate checks. The user is explicitly choosing to skip a phase — they own the consequences.
 
 ---
 

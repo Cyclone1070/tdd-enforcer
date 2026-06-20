@@ -13,6 +13,7 @@ import {
 	gitStashCreate,
 	restoreFilesTo,
 } from "../../engine/git.js";
+import type { Config, Phase } from "../../engine/types.js";
 import { loadTddState } from "./helpers.js";
 import { tddLog } from "./log.js";
 
@@ -25,7 +26,10 @@ export async function handleToolCall(
 		isAllowed: typeof isAllowed;
 		tddLog: typeof tddLog;
 		isToolCallEventType: typeof isToolCallEventType;
-		preBashStashes: Map<string, string>;
+		preBashStashes: Map<
+			string,
+			{ stashHash: string; phase: Phase; config: Config }
+		>;
 	} = {
 		loadTddState,
 		gitStashCreate,
@@ -64,7 +68,11 @@ export async function handleToolCall(
 	if ((event as any).toolName === "bash") {
 		try {
 			const hash = deps.gitStashCreate(root);
-			deps.preBashStashes.set(event.toolCallId, hash);
+			deps.preBashStashes.set(event.toolCallId, {
+				stashHash: hash,
+				phase,
+				config,
+			});
 			deps.tddLog(tddDir, "DEBUG", "tool_call: bash pre-stash created", {
 				toolCallId: event.toolCallId,
 				hash,
@@ -153,7 +161,10 @@ export async function handleToolResult(
 		changesSince: typeof changesSince;
 		isAllowed: typeof isAllowed;
 		restoreFilesTo: typeof restoreFilesTo;
-		preBashStashes: Map<string, string>;
+		preBashStashes: Map<
+			string,
+			{ stashHash: string; phase: Phase; config: Config }
+		>;
 	} = {
 		isBashToolResult,
 		loadTddState,
@@ -173,38 +184,16 @@ export async function handleToolResult(
 	const tddDir = join(root, ".pi", "tdd");
 
 	// Get the pre-bash stash for this tool call
-	const stashHash = deps.preBashStashes.get(event.toolCallId);
+	const entry = deps.preBashStashes.get(event.toolCallId);
 	deps.preBashStashes.delete(event.toolCallId);
-	if (!stashHash) {
+	if (!entry) {
 		deps.tddLog(tddDir, "WARN", "tool_result: no pre-bash stash found", {
 			toolCallId: event.toolCallId,
 		});
 		return;
 	}
 
-	const tdd = deps.loadTddState(root);
-	if (!tdd.ok) {
-		deps.tddLog(
-			tddDir,
-			"WARN",
-			"tool_result: TDD not active, bash passes through",
-			{
-				reason: tdd.reason,
-			},
-		);
-		return;
-	}
-
-	const { state, config } = tdd;
-	if (!state.enabled) {
-		deps.tddLog(
-			tddDir,
-			"DEBUG",
-			"tool_result: TDD disabled, bash passes through",
-		);
-		return;
-	}
-	const phase = state.current;
+	const { stashHash, phase, config } = entry;
 
 	// Diff against pre-bash stash — only changes from THIS command
 	const changed = deps.changesSince(root, stashHash);
@@ -218,21 +207,17 @@ export async function handleToolResult(
 		return;
 	}
 
-	// Config files (.pi/tdd/) are always violations when TDD is active
+	// Revert .pi/tdd/ violations unconditionally.
+	// The stash was created before bash ran, so it has the real pre-bash state.
 	const tddViolations = changed.filter((f) => f.startsWith(".pi/tdd/"));
-
-	if (phase === "refactor") {
-		// In refactor, only .pi/tdd/ files are violations
-		if (tddViolations.length === 0) {
-			deps.tddLog(
-				tddDir,
-				"DEBUG",
-				"tool_result: refactor phase, no TDD dir violations",
-			);
-			return;
-		}
+	if (tddViolations.length > 0) {
+		deps.restoreFilesTo(root, tddViolations, stashHash);
+		deps.tddLog(tddDir, "WARN", "tool_result: reverted .pi/tdd/ file", {
+			violations: tddViolations,
+		});
 	}
 
+	// Check phase-locked violations using cached phase + config
 	const phaseViolations =
 		phase === "refactor"
 			? []
@@ -257,16 +242,28 @@ export async function handleToolResult(
 		violations: cmdViolations,
 	});
 
-	// Revert only this command's violations back to pre-bash state
-	deps.restoreFilesTo(root, cmdViolations, stashHash);
+	// Revert phase-locked violations (tddViolations already reverted above)
+	if (phaseViolations.length > 0) {
+		deps.restoreFilesTo(root, phaseViolations, stashHash);
+	}
 
-	// Find remaining allowed changes from this command (exclude .pi/tdd/)
+	// Find remaining allowed changes (exclude .pi/tdd/)
 	const cmdAllowed = changed.filter(
 		(f) => deps.isAllowed(f, phase, config) && !f.startsWith(".pi/tdd/"),
 	);
 
+	return formatWarning(event, phase, cmdViolations, cmdAllowed);
+}
+
+/** Build the error response warning about reverted files. */
+function formatWarning(
+	event: any,
+	phase: string,
+	cmdViolations: string[],
+	cmdAllowed: string[],
+): { isError: boolean; content: Array<{ type: string; text: string }> } {
 	const existingText = event.content
-		.map((c: any) => ("text" in c ? c.text : ""))
+		?.map((c: any) => ("text" in c ? c.text : ""))
 		.join("");
 	let warning = `\n\n⛔ ${phase.toUpperCase()}: reverted locked files modified by bash:`;
 	for (const f of cmdViolations) warning += `\n  - ${f}`;
@@ -287,7 +284,10 @@ export async function handleToolResult(
 }
 
 export function registerHooks(pi: ExtensionAPI): void {
-	const preBashStashes = new Map<string, string>();
+	const preBashStashes = new Map<
+		string,
+		{ stashHash: string; phase: Phase; config: Config }
+	>();
 	pi.on("tool_call", (event, ctx) =>
 		handleToolCall(event, ctx, {
 			loadTddState,

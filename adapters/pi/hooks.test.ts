@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { Config, Phase } from "../../engine/types.js";
 import { handleToolCall, handleToolResult } from "./hooks.js";
 
 // ── shared mock factories ───────────────────────────────────────────────────
@@ -45,7 +46,10 @@ const mockIsToolCallEventType = vi.fn();
 const mockIsBashToolResult = vi.fn();
 const mockChangesSince = vi.fn();
 const mockRestoreFilesTo = vi.fn();
-const preBashStashes = new Map<string, string>();
+const preBashStashes = new Map<
+	string,
+	{ stashHash: string; phase: Phase; config: Config }
+>();
 
 // Default implementations for type-guard mocks so they behave like real ones.
 mockIsToolCallEventType.mockImplementation(
@@ -68,6 +72,10 @@ function enabledTddState(overrides?: { current?: string }) {
 		state: { enabled: true, current: overrides?.current ?? "red" },
 		config: VALID_CONFIG,
 	};
+}
+
+function stashEntry(phase: Phase) {
+	return { stashHash: "stash123", phase, config: VALID_CONFIG };
 }
 
 // ── handleToolCall ──────────────────────────────────────────────────────────
@@ -129,7 +137,11 @@ describe("handleToolCall", () => {
 
 		expect(result).toBeUndefined();
 		expect(mockGitStashCreate).toHaveBeenCalledWith("/x");
-		expect(preBashStashes.get("bash-1")).toBe("abc123");
+		const cached = preBashStashes.get("bash-1");
+		expect(cached).toBeDefined();
+		expect(cached?.stashHash).toBe("abc123");
+		expect(cached?.phase).toBe("red");
+		expect(cached?.config).toEqual(VALID_CONFIG);
 	});
 
 	it("handles bash stash failure gracefully", async () => {
@@ -358,18 +370,14 @@ describe("handleToolResult", () => {
 		expect(mockTddLog).toHaveBeenCalled();
 	});
 
-	it("passes through when TDD disabled", async () => {
+	it("loadTddState never called in handleToolResult — uses cached state", async () => {
 		mockIsBashToolResult.mockReturnValue(true);
-		preBashStashes.set("some-id", "stash123");
-		mockLoadTddState.mockReturnValue({
-			ok: true,
-			state: { enabled: false, current: "red" },
-			config: VALID_CONFIG,
-		});
+		preBashStashes.set("verify-cache", stashEntry("green"));
+		mockChangesSince.mockReturnValue([]);
 
-		const result = await handleToolResult(
+		await handleToolResult(
 			{
-				toolCallId: "some-id",
+				toolCallId: "verify-cache",
 				toolName: "bash",
 				content: [{ type: "text", text: "ok" }],
 			},
@@ -377,27 +385,40 @@ describe("handleToolResult", () => {
 			makeResultDeps(),
 		);
 
-		expect(result).toBeUndefined();
+		expect(mockLoadTddState).not.toHaveBeenCalled();
 	});
 
-	it("passes through when .pi/tdd/ does not exist", async () => {
+	it("reverts .pi/tdd/ violations from cached state", async () => {
 		mockIsBashToolResult.mockReturnValue(true);
-		preBashStashes.set("1", "stash123");
-		mockLoadTddState.mockReturnValue({ ok: false, reason: "Missing .pi/tdd/" });
+		preBashStashes.set("exploit-id", {
+			stashHash: "stash-exploit",
+			phase: "green",
+			config: VALID_CONFIG,
+		});
+		mockChangesSince.mockReturnValue([".pi/tdd/state.json"]);
 
 		const result = await handleToolResult(
-			{ toolCallId: "1", toolName: "bash", content: [] },
+			{
+				toolCallId: "exploit-id",
+				toolName: "bash",
+				content: [{ type: "text", text: "ok" }],
+			},
 			{ cwd: "/x" } as any,
 			makeResultDeps(),
 		);
 
-		expect(result).toBeUndefined();
+		expect(mockRestoreFilesTo).toHaveBeenCalledWith(
+			"/x",
+			[".pi/tdd/state.json"],
+			"stash-exploit",
+		);
+		expect(result).toBeDefined();
+		expect(result?.content[0].text).toContain("reverted");
 	});
 
-	it("reverts locked file when modified by bash", async () => {
+	it("reverts locked file when modified by bash (uses cached phase)", async () => {
 		mockIsBashToolResult.mockReturnValue(true);
-		preBashStashes.set("bash-revert", "stash-revert");
-		mockLoadTddState.mockReturnValue(enabledTddState({ current: "green" }));
+		preBashStashes.set("bash-revert", stashEntry("green"));
 		mockChangesSince.mockReturnValue(["tests/foo.test.ts"]);
 		mockIsAllowed.mockReturnValue(false);
 
@@ -423,11 +444,11 @@ describe("handleToolResult", () => {
 		expect(mockRestoreFilesTo).toHaveBeenCalledWith(
 			"/x",
 			["tests/foo.test.ts"],
-			"stash-revert",
+			"stash123",
 		);
 	});
 
-	it("passes through when TDD changes to .pi/tdd/ file (not tracked by private git)", async () => {
+	it("passes through when no stash entry", async () => {
 		mockIsBashToolResult.mockReturnValue(true);
 		// preBashStashes has no entry for this callId — handleToolCall never ran
 
@@ -446,8 +467,7 @@ describe("handleToolResult", () => {
 
 	it("passes through when bash makes no changes", async () => {
 		mockIsBashToolResult.mockReturnValue(true);
-		preBashStashes.set("bash-nochange", "stash-nc");
-		mockLoadTddState.mockReturnValue(enabledTddState({ current: "red" }));
+		preBashStashes.set("bash-nochange", stashEntry("red"));
 		mockChangesSince.mockReturnValue([]);
 
 		const result = await handleToolResult(
@@ -466,11 +486,8 @@ describe("handleToolResult", () => {
 
 	it("passes through in refactor phase with no .pi/tdd/ violations", async () => {
 		mockIsBashToolResult.mockReturnValue(true);
-		preBashStashes.set("bash-refactor", "stash-ref");
-		mockLoadTddState.mockReturnValue(enabledTddState({ current: "refactor" }));
+		preBashStashes.set("bash-refactor", stashEntry("refactor"));
 		mockChangesSince.mockReturnValue(["src/main.ts"]);
-		// In refactor, .pi/tdd/ violations check: src/main.ts doesn't start with .pi/tdd/
-		// so tddViolations is empty, then phase === "refactor" early-returns.
 
 		const result = await handleToolResult(
 			{
@@ -487,15 +504,8 @@ describe("handleToolResult", () => {
 
 	it("retains allowed changes alongside reverted violations", async () => {
 		mockIsBashToolResult.mockReturnValue(true);
-		preBashStashes.set("bash-mixed", "stash-mixed");
-		mockLoadTddState.mockReturnValue(enabledTddState({ current: "green" }));
+		preBashStashes.set("bash-mixed", stashEntry("green"));
 		mockChangesSince.mockReturnValue(["tests/foo.test.ts", "README.md"]);
-		// phaseViolations filter (changed = ["tests/foo.test.ts", "README.md"]):
-		//   f="tests/foo.test.ts" → isAllowed returns false → !false = true → violation
-		//   f="README.md"          → isAllowed returns true  → !true = false → not a violation
-		// cmdAllowed filter:
-		//   f="tests/foo.test.ts" → isAllowed returns false → excluded from cmdAllowed
-		//   f="README.md"          → isAllowed returns true  → included in cmdAllowed
 		mockIsAllowed
 			.mockReturnValueOnce(false) // phaseViolations: tests/foo.test.ts → violation
 			.mockReturnValueOnce(true) // phaseViolations: README.md → not a violation
@@ -519,18 +529,16 @@ describe("handleToolResult", () => {
 		expect(result?.content[0].text).toContain("Allowed changes retained");
 		expect(result?.content[0].text).toContain("README.md");
 
-		// Only the violation should be restored
 		expect(mockRestoreFilesTo).toHaveBeenCalledWith(
 			"/x",
 			["tests/foo.test.ts"],
-			"stash-mixed",
+			"stash123",
 		);
 	});
 
 	it("passes through when only allowed files changed", async () => {
 		mockIsBashToolResult.mockReturnValue(true);
-		preBashStashes.set("bash-allowed", "stash-allowed");
-		mockLoadTddState.mockReturnValue(enabledTddState({ current: "green" }));
+		preBashStashes.set("bash-allowed", stashEntry("green"));
 		mockChangesSince.mockReturnValue(["src/main.ts"]);
 		mockIsAllowed.mockReturnValue(true);
 
@@ -545,5 +553,23 @@ describe("handleToolResult", () => {
 		);
 
 		expect(result).toBeUndefined();
+	});
+
+	it("cleans up stash entry after processing", async () => {
+		mockIsBashToolResult.mockReturnValue(true);
+		preBashStashes.set("cleanup", stashEntry("green"));
+		mockChangesSince.mockReturnValue([]);
+
+		await handleToolResult(
+			{
+				toolCallId: "cleanup",
+				toolName: "bash",
+				content: [{ type: "text", text: "done" }],
+			},
+			{ cwd: "/x" } as any,
+			makeResultDeps(),
+		);
+
+		expect(preBashStashes.has("cleanup")).toBe(false);
 	});
 });
