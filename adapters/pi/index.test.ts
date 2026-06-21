@@ -430,10 +430,8 @@ describe("handleBeforeAgentStart", () => {
 		};
 	}
 
-	function makeEvent(): {
-		systemPromptOptions: { promptGuidelines: string[] };
-	} {
-		return { systemPromptOptions: { promptGuidelines: [] } };
+	function makeEvent(): { systemPrompt: string } {
+		return { systemPrompt: "" };
 	}
 
 	beforeEach(() => {
@@ -441,7 +439,7 @@ describe("handleBeforeAgentStart", () => {
 		mockLoadTddState = vi.fn();
 	});
 
-	it("pushes guidelines when TDD enabled", async () => {
+	it("appends TDD instructions when TDD enabled", async () => {
 		mockLoadTddState.mockReturnValue({
 			ok: true,
 			state: { enabled: true, current: "red" },
@@ -458,19 +456,13 @@ describe("handleBeforeAgentStart", () => {
 			{ cwd: "/test" } as any,
 			makeDeps(),
 		);
-		expect(event.systemPromptOptions.promptGuidelines).toHaveLength(3);
-		expect(event.systemPromptOptions.promptGuidelines[0]).toContain(
-			"locked files will be blocked",
-		);
-		expect(event.systemPromptOptions.promptGuidelines[1]).toContain(
-			"next_tdd_phase",
-		);
-		expect(event.systemPromptOptions.promptGuidelines[2]).toContain(
-			"cycle so reverting is cheap",
-		);
+		expect(event.systemPrompt).toContain("TDD enforcement");
+		expect(event.systemPrompt).toContain("locked files will be blocked");
+		expect(event.systemPrompt).toContain("cycle so reverting is cheap");
+		expect(event.systemPrompt).not.toContain("next_tdd_phase");
 	});
 
-	it("does not push guidelines when TDD not setup", async () => {
+	it("does not modify systemPrompt when TDD not setup", async () => {
 		mockLoadTddState.mockReturnValue({
 			ok: false,
 			reason: "Missing .pi/tdd/",
@@ -481,10 +473,10 @@ describe("handleBeforeAgentStart", () => {
 			{ cwd: "/test" } as any,
 			makeDeps(),
 		);
-		expect(event.systemPromptOptions.promptGuidelines).toHaveLength(0);
+		expect(event.systemPrompt).toBe("");
 	});
 
-	it("does not push guidelines when TDD disabled", async () => {
+	it("appends disabled message when TDD was disabled", async () => {
 		mockLoadTddState.mockReturnValue({
 			ok: true,
 			state: { enabled: false, current: "red" },
@@ -501,6 +493,6 @@ describe("handleBeforeAgentStart", () => {
 			{ cwd: "/test" } as any,
 			makeDeps(),
 		);
-		expect(event.systemPromptOptions.promptGuidelines).toHaveLength(0);
+		expect(event.systemPrompt).toContain("was disabled");
 	});
 });
