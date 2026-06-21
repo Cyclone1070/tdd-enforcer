@@ -154,18 +154,23 @@ export async function handleBeforeAgentStart(
 	deps: {
 		loadTddState: typeof loadTddState;
 	},
-): Promise<void> {
+): Promise<{ systemPrompt: string } | undefined> {
 	const tdd = deps.loadTddState(ctx.cwd);
 	if (!tdd.ok) return;
 
 	if (tdd.state.enabled) {
-		event.systemPrompt +=
-			"\n\nYou are working under TDD enforcement. Each phase restricts which files you can modify — locked files will be blocked automatically.\n" +
-			"Minimise the scope of each TDD cycle so reverting is cheap.";
-	} else {
-		event.systemPrompt +=
-			"\n\nTDD enforcement was disabled. File restrictions are no longer enforced.";
+		return {
+			systemPrompt:
+				event.systemPrompt +
+				"\n\nYou are working under TDD enforcement. Each phase restricts which files you can modify — locked files will be blocked automatically.\n" +
+				"Minimise the scope of each TDD cycle so reverting is cheap.",
+		};
 	}
+	return {
+		systemPrompt:
+			event.systemPrompt +
+			"\n\nTDD enforcement was disabled. File restrictions are no longer enforced.",
+	};
 }
 
 export async function handleTddJump(

@@ -430,7 +430,7 @@ describe("handleBeforeAgentStart", () => {
 		};
 	}
 
-	function makeEvent(): { systemPrompt: string } {
+	function _makeEvent(): { systemPrompt: string } {
 		return { systemPrompt: "" };
 	}
 
@@ -439,7 +439,7 @@ describe("handleBeforeAgentStart", () => {
 		mockLoadTddState = vi.fn();
 	});
 
-	it("appends TDD instructions when TDD enabled", async () => {
+	it("returns instructions when TDD enabled", async () => {
 		mockLoadTddState.mockReturnValue({
 			ok: true,
 			state: { enabled: true, current: "red" },
@@ -450,33 +450,32 @@ describe("handleBeforeAgentStart", () => {
 				timeoutSeconds: 30,
 			},
 		});
-		const event = makeEvent();
-		await handleBeforeAgentStart(
-			event as any,
+		const result = await handleBeforeAgentStart(
+			{ systemPrompt: "" } as any,
 			{ cwd: "/test" } as any,
 			makeDeps(),
 		);
-		expect(event.systemPrompt).toContain("TDD enforcement");
-		expect(event.systemPrompt).toContain("locked files will be blocked");
-		expect(event.systemPrompt).toContain("cycle so reverting is cheap");
-		expect(event.systemPrompt).not.toContain("next_tdd_phase");
+		expect(result).toBeDefined();
+		expect(result?.systemPrompt).toContain("TDD enforcement");
+		expect(result?.systemPrompt).toContain("locked files will be blocked");
+		expect(result?.systemPrompt).toContain("cycle so reverting is cheap");
+		expect(result?.systemPrompt).not.toContain("next_tdd_phase");
 	});
 
-	it("does not modify systemPrompt when TDD not setup", async () => {
+	it("returns undefined when TDD not setup", async () => {
 		mockLoadTddState.mockReturnValue({
 			ok: false,
 			reason: "Missing .pi/tdd/",
 		});
-		const event = makeEvent();
-		await handleBeforeAgentStart(
-			event as any,
+		const result = await handleBeforeAgentStart(
+			{ systemPrompt: "" } as any,
 			{ cwd: "/test" } as any,
 			makeDeps(),
 		);
-		expect(event.systemPrompt).toBe("");
+		expect(result).toBeUndefined();
 	});
 
-	it("appends disabled message when TDD was disabled", async () => {
+	it("returns disabled message when TDD was disabled", async () => {
 		mockLoadTddState.mockReturnValue({
 			ok: true,
 			state: { enabled: false, current: "red" },
@@ -487,12 +486,12 @@ describe("handleBeforeAgentStart", () => {
 				timeoutSeconds: 30,
 			},
 		});
-		const event = makeEvent();
-		await handleBeforeAgentStart(
-			event as any,
+		const result = await handleBeforeAgentStart(
+			{ systemPrompt: "" } as any,
 			{ cwd: "/test" } as any,
 			makeDeps(),
 		);
-		expect(event.systemPrompt).toContain("was disabled");
+		expect(result).toBeDefined();
+		expect(result?.systemPrompt).toContain("was disabled");
 	});
 });
