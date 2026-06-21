@@ -42,7 +42,7 @@ It locks files per phase — only test files in RED, only implementation files i
 - `blockedInRed` — globs the agent **cannot** modify in RED phase (implementation files)
 - `blockedInGreen` — globs the agent **cannot** modify in GREEN phase (test files)
 - `!` exclusion prefix — optional, carves out subsets from a block list at init time. E.g. `!src/**/*.test.ts` excludes co-located test files from `blockedInRed` so the agent can write them in RED phase
-- `testCommands` — shell commands to run tests
+- `testCommands` — shell commands to run tests. **Runs sequentially** — each entry is started one after another. Use `&&` inside a single string entry to chain multiple commands in one step (e.g. `"npm run build && npm test"`). Do not rely on array ordering for dependency chains; put dependent commands in the same string entry with `&&`.
 - `timeoutSeconds` — test timeout per command
 
 2. **User** runs `/tdd:on` to enable enforcement.
