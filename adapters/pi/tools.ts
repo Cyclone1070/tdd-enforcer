@@ -292,18 +292,15 @@ export async function executeTddStatus(
 		});
 		throw new Error(`TDD: ${result.reason}`);
 	}
-	if (!result.state.enabled) {
-		deps.tddLog(tddDir, "WARN", "tdd_status: TDD disabled");
-		throw new Error("TDD is not enabled. Run /tdd:on to enable it.");
-	}
-
 	const { state, config } = result;
+	const enabledStr = state.enabled ? "enabled" : "disabled";
 	const phaseStr = state.current.toUpperCase();
 	const redBlk = config.blockedInRed.join(", ") || "(none)";
 	const greenBlk = config.blockedInGreen.join(", ") || "(none)";
 	const commands = config.testCommands.join(", ") || "(none)";
 
 	deps.tddLog(tddDir, "INFO", "tdd_status: queried", {
+		enabled: state.enabled,
 		phase: state.current,
 	});
 
@@ -312,7 +309,7 @@ export async function executeTddStatus(
 			{
 				type: "text",
 				text:
-					`\nTDD enforcer enabled\n` +
+					`\nTDD enforcer ${enabledStr}\n` +
 					`Current phase: ${phaseStr}\n` +
 					`Blocked in RED: ${redBlk}\n` +
 					`Blocked in GREEN: ${greenBlk}\n` +
@@ -320,7 +317,7 @@ export async function executeTddStatus(
 			},
 		],
 		details: {
-			enabled: true,
+			enabled: state.enabled,
 			phase: state.current,
 			blockedInRed: config.blockedInRed,
 			blockedInGreen: config.blockedInGreen,

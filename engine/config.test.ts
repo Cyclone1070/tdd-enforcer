@@ -61,6 +61,24 @@ describe("loadConfig", () => {
 		});
 	});
 
+	it("defaults timeoutSeconds to 120 when omitted", () => {
+		withTempDir((dir) => {
+			const tddDir = join(dir, ".pi", "tdd");
+			mkdirSync(tddDir, { recursive: true });
+			writeFileSync(
+				join(tddDir, "rules.json"),
+				JSON.stringify({
+					blockedInRed: ["tests/**/*.test.ts"],
+					blockedInGreen: ["src/**/*.ts"],
+					testCommands: ["npm test"],
+				}),
+				"utf-8",
+			);
+			const config = loadConfig(dir);
+			expect(config.timeoutSeconds).toBe(120);
+		});
+	});
+
 	describe("validation — throws on invalid content", () => {
 		it("throws when blockedInRed is not an array", () => {
 			withTempDir((dir) => {
@@ -166,6 +184,57 @@ describe("loadConfig", () => {
 						blockedInRed: ["tests/**/*.test.ts"],
 						blockedInGreen: ["src/**/*.ts"],
 						testCommands: [],
+					}),
+					"utf-8",
+				);
+				expect(() => loadConfig(dir)).toThrow();
+			});
+		});
+
+		it("throws when blockedInRed contains non-strings", () => {
+			withTempDir((dir) => {
+				const tddDir = join(dir, ".pi", "tdd");
+				mkdirSync(tddDir, { recursive: true });
+				writeFileSync(
+					join(tddDir, "rules.json"),
+					JSON.stringify({
+						blockedInRed: [123],
+						blockedInGreen: ["src/**/*.ts"],
+						testCommands: ["npm test"],
+					}),
+					"utf-8",
+				);
+				expect(() => loadConfig(dir)).toThrow();
+			});
+		});
+
+		it("throws when blockedInGreen contains non-strings", () => {
+			withTempDir((dir) => {
+				const tddDir = join(dir, ".pi", "tdd");
+				mkdirSync(tddDir, { recursive: true });
+				writeFileSync(
+					join(tddDir, "rules.json"),
+					JSON.stringify({
+						blockedInRed: ["tests/**/*.test.ts"],
+						blockedInGreen: [null],
+						testCommands: ["npm test"],
+					}),
+					"utf-8",
+				);
+				expect(() => loadConfig(dir)).toThrow();
+			});
+		});
+
+		it("throws when testCommands contains non-strings", () => {
+			withTempDir((dir) => {
+				const tddDir = join(dir, ".pi", "tdd");
+				mkdirSync(tddDir, { recursive: true });
+				writeFileSync(
+					join(tddDir, "rules.json"),
+					JSON.stringify({
+						blockedInRed: ["tests/**/*.test.ts"],
+						blockedInGreen: ["src/**/*.ts"],
+						testCommands: ["npm test", 456],
 					}),
 					"utf-8",
 				);

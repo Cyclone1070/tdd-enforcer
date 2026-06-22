@@ -382,15 +382,20 @@ describe("executeTddStatus", () => {
 		).rejects.toThrow("Missing .pi/tdd/");
 	});
 
-	it("throws when TDD disabled", async () => {
+	it("returns status details when TDD disabled", async () => {
 		mockLoadTddState.mockReturnValue({
 			ok: true,
 			state: { enabled: false, current: "red" },
 			config: CONFIG,
 		});
-		await expect(
-			executeTddStatus({ cwd: "/test" } as any, makeDeps()),
-		).rejects.toThrow("not enabled");
+		const result = await executeTddStatus({ cwd: "/test" } as any, makeDeps());
+		expect(result.content[0].text).toContain("disabled");
+		expect(result.content[0].text).toContain("RED");
+		expect(result.content[0].text).toContain("tests/**/*.test.ts");
+		expect(result.content[0].text).toContain("src/**/*.ts");
+		expect(result.details).toBeDefined();
+		expect(result.details?.enabled).toBe(false);
+		expect(result.details?.phase).toBe("red");
 	});
 
 	it("returns status details when TDD enabled", async () => {

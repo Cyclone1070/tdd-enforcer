@@ -16,14 +16,23 @@ export function loadConfig(projectRoot: string): Config {
 	if (!Array.isArray(parsed.blockedInRed) || parsed.blockedInRed.length === 0) {
 		throw new Error("rules.json: blockedInRed must be a non-empty array");
 	}
+	if (!parsed.blockedInRed.every((p: unknown) => typeof p === "string")) {
+		throw new Error("rules.json: blockedInRed must contain only strings");
+	}
 	if (
 		!Array.isArray(parsed.blockedInGreen) ||
 		parsed.blockedInGreen.length === 0
 	) {
 		throw new Error("rules.json: blockedInGreen must be a non-empty array");
 	}
+	if (!parsed.blockedInGreen.every((p: unknown) => typeof p === "string")) {
+		throw new Error("rules.json: blockedInGreen must contain only strings");
+	}
 	if (!Array.isArray(parsed.testCommands) || parsed.testCommands.length === 0) {
 		throw new Error("rules.json: testCommands must be a non-empty array");
+	}
+	if (!parsed.testCommands.every((p: unknown) => typeof p === "string")) {
+		throw new Error("rules.json: testCommands must contain only strings");
 	}
 
 	return {

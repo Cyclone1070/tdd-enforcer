@@ -38,9 +38,6 @@ function recoverState(
 				if (label === "init") {
 					return { enabled: false, current: "red" };
 				}
-				if (label !== "red" && label !== "green" && label !== "refactor") {
-					return { enabled: false, current: "red" };
-				}
 				const next = deps.nextPhase(label);
 				return { enabled: true, current: next ?? "red" };
 			}

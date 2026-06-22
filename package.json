@@ -3,7 +3,6 @@
 	"version": "0.3.2",
 	"type": "module",
 	"scripts": {
-		"fmt": "biome format --write .",
 		"lint": "biome check .",
 		"lint:fix": "biome check --write .",
 		"test": "vitest run"
