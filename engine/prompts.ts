@@ -1,4 +1,4 @@
-import type { Config, Phase } from "../../engine/types.js";
+import type { Config, Phase } from "./types.js";
 
 export function getNudgePrompt(phase: Phase, config: Config): string {
 	const redBlock = config.blockedInRed.join(", ");

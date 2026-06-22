@@ -17,7 +17,12 @@ export {
 	undoLastCommit,
 	untrackedFiles,
 } from "./git.js";
-export { loadPhaseState, savePhaseState } from "./state.js";
+export { tddLog } from "./log.js";
+export type { AdvanceResult } from "./orchestrate.js";
+export { advancePhase, getStatusInfo, revertPhase } from "./orchestrate.js";
+export { getNudgePrompt } from "./prompts.js";
+export type { TddLoadResult } from "./state.js";
+export { loadPhaseState, loadTddState, savePhaseState } from "./state.js";
 export { checkGate, getDisallowedChanges, nextPhase } from "./transition.js";
 export type {
 	Config,

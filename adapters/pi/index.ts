@@ -3,10 +3,14 @@ import type {
 	ExtensionAPI,
 	ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
-import { resetGit, savePhaseState, snapshot } from "../../engine/index.js";
-import { loadTddState } from "./helpers.js";
+import {
+	loadTddState,
+	resetGit,
+	savePhaseState,
+	snapshot,
+	tddLog,
+} from "../../engine/index.js";
 import { registerHooks } from "./hooks.js";
-import { tddLog } from "./log.js";
 import { registerTools } from "./tools.js";
 
 export async function handleTddOn(

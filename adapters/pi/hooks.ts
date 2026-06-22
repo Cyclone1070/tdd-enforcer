@@ -13,9 +13,8 @@ import {
 	gitStashCreate,
 	restoreFilesTo,
 } from "../../engine/git.js";
+import { loadTddState, tddLog } from "../../engine/index.js";
 import type { Config, Phase } from "../../engine/types.js";
-import { loadTddState } from "./helpers.js";
-import { tddLog } from "./log.js";
 
 export async function handleToolCall(
 	event: any,
