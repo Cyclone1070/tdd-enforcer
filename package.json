@@ -3,6 +3,7 @@
 	"version": "0.3.4",
 	"type": "module",
 	"scripts": {
+		"check": "biome check --write . && vitest run",
 		"lint": "biome check .",
 		"lint:fix": "biome check --write .",
 		"test": "vitest run"
