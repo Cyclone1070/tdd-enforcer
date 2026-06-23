@@ -1,10 +1,10 @@
 # tdd-enforcer
 
-[![CI](https://github.com/earendil-works/tdd-enforcer/actions/workflows/ci.yml/badge.svg)](https://github.com/earendil-works/tdd-enforcer/actions/workflows/ci.yml)
-[![npm version](https://img.shields.io/npm/v/tdd-enforcer.svg)](https://www.npmjs.com/package/tdd-enforcer)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+**Lock files per TDD phase. Gate transitions on test outcomes.**
 
-Enforces the **Red–Green–Refactor** TDD cycle by locking files per phase and validating phase transitions through automated test gates.
+[![CI](https://github.com/Cyclone1070/tdd-enforcer/actions/workflows/ci.yml/badge.svg)](https://github.com/Cyclone1070/tdd-enforcer/actions/workflows/ci.yml)
+[![npm version](https://img.shields.io/npm/v/tdd-enforcer.svg)](https://www.npmjs.com/package/tdd-enforcer)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 ---
 
