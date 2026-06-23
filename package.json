@@ -1,7 +1,18 @@
 {
 	"name": "tdd-enforcer",
-	"version": "0.3.4",
+	"version": "0.3.5",
 	"type": "module",
+	"description": "TDD enforcer extension for the pi coding agent — enforces Red-Green-Refactor phases with file access restrictions and transition gates",
+	"license": "MIT",
+	"author": "Cyclone1070 <hoangmai1070@gmail.com>",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/Cyclone1070/tdd-enforcer.git"
+	},
+	"bugs": {
+		"url": "https://github.com/Cyclone1070/tdd-enforcer/issues"
+	},
+	"homepage": "https://github.com/Cyclone1070/tdd-enforcer#readme",
 	"scripts": {
 		"check": "biome check --write . && vitest run",
 		"lint": "biome check .",

@@ -172,6 +172,25 @@ describe("executeNextPhase", () => {
 		});
 	});
 
+	it("blocks on timeout with timeout message from checkGate", async () => {
+		mockLoadTddState.mockReturnValue({
+			ok: true,
+			state: { enabled: true, current: "red" },
+			config: CONFIG,
+		});
+		mockCheckGate.mockResolvedValue({
+			passed: false,
+			timeout: true,
+			message:
+				"Tests timed out after 30s. The test command may have hung or an operation may be blocking.",
+		});
+		await expect(
+			executeNextPhase({ cwd: "/test" } as any, makeDeps()),
+		).rejects.toThrow("timed out");
+		expect(mockSnapshot).not.toHaveBeenCalled();
+		expect(mockSavePhaseState).not.toHaveBeenCalled();
+	});
+
 	it("advances green→refactor when tests pass", async () => {
 		mockLoadTddState.mockReturnValue({
 			ok: true,

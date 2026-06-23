@@ -126,14 +126,29 @@ export async function executeNextPhase(
 						cwd: root,
 						timeout: timeout * 1000,
 					});
-					return { command: cmd, passed: true };
-				} catch {
-					return { command: cmd, passed: false };
+					return { command: cmd, passed: true, timedOut: false } as const;
+				} catch (err) {
+					const timedOut = (err as any)?.killed === true;
+					return {
+						command: cmd,
+						passed: false,
+						timedOut,
+					} as const;
 				}
 			}),
 		);
 
-		const failed = results.filter((r) => !r.passed);
+		const timedOut = results.filter((r) => r.timedOut);
+		const failed = results.filter((r) => !r.passed && !r.timedOut);
+
+		if (timedOut.length > 0) {
+			return {
+				passed: false,
+				timeout: true,
+				message: `Tests timed out after ${timeout}s:\n${timedOut.map((f) => `  - ${f.command}`).join("\n")}`,
+			};
+		}
+
 		if (failed.length > 0) {
 			return {
 				passed: false,

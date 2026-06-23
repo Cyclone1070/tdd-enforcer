@@ -13,6 +13,7 @@ export function nextPhase(current: Phase): Phase | null {
 export interface GateResult {
 	passed: boolean;
 	message: string;
+	timeout?: boolean;
 }
 
 export type TestRunner = (
@@ -33,6 +34,15 @@ export async function checkGate(
 	config: Config,
 ): Promise<GateResult> {
 	const result = await testRunner(config.testCommands, config.timeoutSeconds);
+
+	// Timeout blocks all transitions — don't suggest "fix tests"
+	if (result.timeout) {
+		return {
+			passed: false,
+			timeout: true,
+			message: `Tests timed out after ${config.timeoutSeconds}s. The test command may have hung or an operation may be blocking.`,
+		};
+	}
 
 	switch (`${from}→${to}` as Transition) {
 		case "red→green":
