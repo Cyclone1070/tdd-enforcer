@@ -29,7 +29,7 @@ pi install npm:tdd-enforcer
 
 ### 2. Ask the agent to set up TDD
 
-Tell the agent to configure TDD for your project, using the tdd-enforcer skill to create `.pi/tdd/rules.json` with the right file globs and test commands for your stack.
+Tell the agent to configure TDD for your project, using the `tdd-enforcer` skill to create `.pi/tdd/rules.json` with the right file globs and test commands for your stack.
 
 ### 3. Enable TDD
 
