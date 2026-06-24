@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
-	handleBeforeAgentStart,
 	handleTddJump,
 	handleTddOff,
 	handleTddOn,
@@ -418,80 +417,4 @@ describe("handleTddJump", () => {
 	});
 });
 
-// ── handleBeforeAgentStart ──────────────────────────────────────────────────
 
-describe("handleBeforeAgentStart", () => {
-	let mockLoadTddState: ReturnType<typeof vi.fn>;
-
-	function makeDeps(overrides = {}) {
-		return {
-			loadTddState: mockLoadTddState,
-			...overrides,
-		};
-	}
-
-	function _makeEvent(): { systemPrompt: string } {
-		return { systemPrompt: "" };
-	}
-
-	beforeEach(() => {
-		vi.clearAllMocks();
-		mockLoadTddState = vi.fn();
-	});
-
-	it("returns instructions when TDD enabled", async () => {
-		mockLoadTddState.mockReturnValue({
-			ok: true,
-			state: { enabled: true, current: "red" },
-			config: {
-				blockedInRed: [],
-				blockedInGreen: [],
-				testCommands: [],
-				timeoutSeconds: 30,
-			},
-		});
-		const result = await handleBeforeAgentStart(
-			{ systemPrompt: "" } as any,
-			{ cwd: "/test" } as any,
-			makeDeps(),
-		);
-		expect(result).toBeDefined();
-		expect(result?.systemPrompt).toContain("TDD enforcement");
-		expect(result?.systemPrompt).toContain("locked files will be blocked");
-		expect(result?.systemPrompt).toContain("cycle so reverting is cheap");
-		expect(result?.systemPrompt).not.toContain("next_tdd_phase");
-	});
-
-	it("returns undefined when TDD not setup", async () => {
-		mockLoadTddState.mockReturnValue({
-			ok: false,
-			reason: "Missing .pi/tdd/",
-		});
-		const result = await handleBeforeAgentStart(
-			{ systemPrompt: "" } as any,
-			{ cwd: "/test" } as any,
-			makeDeps(),
-		);
-		expect(result).toBeUndefined();
-	});
-
-	it("returns disabled message when TDD was disabled", async () => {
-		mockLoadTddState.mockReturnValue({
-			ok: true,
-			state: { enabled: false, current: "red" },
-			config: {
-				blockedInRed: [],
-				blockedInGreen: [],
-				testCommands: [],
-				timeoutSeconds: 30,
-			},
-		});
-		const result = await handleBeforeAgentStart(
-			{ systemPrompt: "" } as any,
-			{ cwd: "/test" } as any,
-			makeDeps(),
-		);
-		expect(result).toBeDefined();
-		expect(result?.systemPrompt).toContain("was disabled");
-	});
-});
