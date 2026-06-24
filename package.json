@@ -1,43 +1,43 @@
 {
-    "name": "tdd-enforcer",
-    "version": "0.3.6",
-    "type": "module",
-    "description": "TDD enforcer extension for the pi coding agent — enforces Red-Green-Refactor phases with file access restrictions and transition gates",
-    "license": "MIT",
-    "author": "Cyclone1070 <hoangmai1070@gmail.com>",
-    "repository": {
-        "type": "git",
-        "url": "git+https://github.com/Cyclone1070/tdd-enforcer.git"
-    },
-    "bugs": {
-        "url": "https://github.com/Cyclone1070/tdd-enforcer/issues"
-    },
-    "homepage": "https://github.com/Cyclone1070/tdd-enforcer#readme",
-    "scripts": {
-        "check": "biome check --write . && vitest run",
-        "lint": "biome check .",
-        "lint:fix": "biome check --write .",
-        "test": "vitest run"
-    },
-    "keywords": [
-        "pi-package"
-    ],
-    "dependencies": {
-        "picomatch": "^4.0.4"
-    },
-    "devDependencies": {
-        "@biomejs/biome": "^2.5.0",
-        "@earendil-works/pi-coding-agent": "^0.79.6",
-        "@types/node": "^25.9.3",
-        "typebox": "^1.2.16",
-        "vitest": "^3"
-    },
-    "pi": {
-        "extensions": [
-            "./adapters/pi/index.ts"
-        ],
-        "skills": [
-            "./skills"
-        ]
-    }
+	"name": "tdd-enforcer",
+	"version": "0.3.6",
+	"type": "module",
+	"description": "TDD enforcer extension for the pi coding agent — enforces Red-Green-Refactor phases with file access restrictions and transition gates",
+	"license": "MIT",
+	"author": "Cyclone1070 <hoangmai1070@gmail.com>",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/Cyclone1070/tdd-enforcer.git"
+	},
+	"bugs": {
+		"url": "https://github.com/Cyclone1070/tdd-enforcer/issues"
+	},
+	"homepage": "https://github.com/Cyclone1070/tdd-enforcer#readme",
+	"scripts": {
+		"check": "biome check --write . && vitest run",
+		"lint": "biome check .",
+		"lint:fix": "biome check --write .",
+		"test": "vitest run"
+	},
+	"keywords": [
+		"pi-package"
+	],
+	"dependencies": {
+		"picomatch": "^4.0.4"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "^2.5.0",
+		"@earendil-works/pi-coding-agent": "^0.79.6",
+		"@types/node": "^25.9.3",
+		"typebox": "^1.2.16",
+		"vitest": "^3"
+	},
+	"pi": {
+		"extensions": [
+			"./adapters/pi/index.ts"
+		],
+		"skills": [
+			"./skills"
+		]
+	}
 }

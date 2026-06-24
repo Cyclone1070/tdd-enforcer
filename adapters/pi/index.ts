@@ -152,7 +152,6 @@ export async function handleTddStatus(
 	);
 }
 
-
 export async function handleTddJump(
 	phase: "red" | "green" | "refactor",
 	ctx: ExtensionContext,

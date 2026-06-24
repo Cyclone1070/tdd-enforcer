@@ -416,5 +416,3 @@ describe("handleTddJump", () => {
 		expect(ctx.notifications[0].message).toContain("Skipped to RED phase");
 	});
 });
-
-
