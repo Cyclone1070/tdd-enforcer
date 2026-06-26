@@ -3,8 +3,13 @@
 **Lock files per TDD phase. Gate transitions on test outcomes.**
 
 [![CI](https://github.com/Cyclone1070/tdd-enforcer/actions/workflows/ci.yml/badge.svg)](https://github.com/Cyclone1070/tdd-enforcer/actions/workflows/ci.yml)
+
 [![npm version](https://img.shields.io/npm/v/tdd-enforcer.svg)](https://www.npmjs.com/package/tdd-enforcer)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
+---
+
+<img width="741" height="586" alt="Screenshot 2026-06-26 at 20 52 02" src="https://github.com/user-attachments/assets/4bba490d-ab94-43b1-8c2a-552b34374aee" />
 
 ---
 
