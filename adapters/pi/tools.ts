@@ -153,7 +153,7 @@ export async function executeNextPhase(
 			return {
 				passed: false,
 				cancelled: true,
-				message: `Test execution was cancelled.\n${cancelled.map((f) => `  - ${f.command}`).join("\n")}`,
+				message: `\nTest execution was cancelled.\n${cancelled.map((f) => `  - ${f.command}`).join("\n")}`,
 			};
 		}
 
