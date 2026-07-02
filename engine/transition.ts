@@ -14,6 +14,7 @@ export interface GateResult {
 	passed: boolean;
 	message: string;
 	timeout?: boolean;
+	cancelled?: boolean;
 }
 
 export type TestRunner = (
@@ -34,6 +35,15 @@ export async function checkGate(
 	config: Config,
 ): Promise<GateResult> {
 	const result = await testRunner(config.testCommands, config.timeoutSeconds);
+
+	// Cancellation blocks all transitions — preserve the message from testRunner
+	if (result.cancelled) {
+		return {
+			passed: false,
+			cancelled: true,
+			message: result.message,
+		};
+	}
 
 	// Timeout blocks all transitions — don't suggest "fix tests"
 	if (result.timeout) {

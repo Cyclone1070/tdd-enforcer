@@ -246,6 +246,85 @@ describe("executeNextPhase", () => {
 			current: "red",
 		});
 	});
+
+	it("passes ctx.signal through to asyncExec for user cancellation", async () => {
+		const ac = new AbortController();
+
+		// Use green→refactor so passing tests satisfy the gate check
+		mockLoadTddState.mockReturnValue({
+			ok: true,
+			state: { enabled: true, current: "green" },
+			config: CONFIG,
+		});
+
+		// A checkGate mock that actually runs the testRunner so asyncExec is called
+		const callTestRunner = vi.fn(
+			async (_from: string, _to: string, tr: any, cfg: any) => {
+				return tr(cfg.testCommands, cfg.timeoutSeconds);
+			},
+		);
+
+		mockAsyncExec.mockImplementation(async (_cmd: string, opts?: any) => {
+			expect(opts?.signal).toBe(ac.signal);
+			return { stdout: "", stderr: "" };
+		});
+
+		await executeNextPhase(
+			{ cwd: "/test", signal: ac.signal } as any,
+			makeDeps({ checkGate: callTestRunner as any }),
+		);
+
+		expect(mockAsyncExec).toHaveBeenCalledWith(
+			"npm test",
+			expect.objectContaining({ signal: ac.signal }),
+		);
+	});
+
+	it("returns cancellation message when signal is aborted mid-execution", async () => {
+		const ac = new AbortController();
+
+		mockLoadTddState.mockReturnValue({
+			ok: true,
+			state: { enabled: true, current: "green" },
+			config: CONFIG,
+		});
+
+		const callTestRunner = vi.fn(
+			async (_from: string, _to: string, tr: any, cfg: any) => {
+				return tr(cfg.testCommands, cfg.timeoutSeconds);
+			},
+		);
+
+		// asyncExec that hangs until signal aborts, then rejects like exec does on kill
+		mockAsyncExec.mockImplementation(async (_cmd: string, opts?: any) => {
+			return new Promise((_resolve, reject) => {
+				if (opts?.signal) {
+					if (opts.signal.aborted) {
+						const err: any = new Error("canceled");
+						err.killed = true;
+						reject(err);
+					} else {
+						opts.signal.addEventListener("abort", () => {
+							const err: any = new Error("canceled");
+							err.killed = true;
+							reject(err);
+						});
+					}
+				}
+			});
+		});
+
+		const promise = executeNextPhase(
+			{ cwd: "/test", signal: ac.signal } as any,
+			makeDeps({ checkGate: callTestRunner as any }),
+		);
+
+		ac.abort();
+
+		await expect(promise).rejects.toThrow("cancelled");
+		expect(mockSnapshot).not.toHaveBeenCalled();
+		expect(mockSavePhaseState).not.toHaveBeenCalled();
+	});
 });
 
 // ── executePreviousPhase ────────────────────────────────────────────────────

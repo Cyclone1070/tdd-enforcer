@@ -25,15 +25,22 @@ describe("nextPhase", () => {
 
 // ── Pure unit tests: checkGate ──────────────────────────────────────────────
 
-function makeRunner(passed: boolean, timeout?: boolean): TestRunner {
+function makeRunner(
+	passed: boolean,
+	timeout?: boolean,
+	cancelled?: boolean,
+): TestRunner {
 	return async (_cmds, _timeout) => ({
 		passed,
 		timeout,
-		message: timeout
-			? "npm test: timed out"
-			: passed
-				? "all ok"
-				: "tests failed",
+		cancelled,
+		message: cancelled
+			? "Test execution was cancelled."
+			: timeout
+				? "npm test: timed out"
+				: passed
+					? "all ok"
+					: "tests failed",
 	});
 }
 
@@ -69,6 +76,19 @@ describe("checkGate", () => {
 			expect(r.timeout).toBe(true);
 			expect(r.message).toMatch(/timed out/i);
 			expect(r.message).not.toMatch(/proceed|fail/i);
+		});
+
+		it("blocks on cancellation — preserves cancellation message", async () => {
+			const r = await checkGate(
+				"red",
+				"green",
+				makeRunner(false, undefined, true),
+				testConfig,
+			);
+			expect(r.passed).toBe(false);
+			expect(r.cancelled).toBe(true);
+			expect(r.message).toMatch(/cancelled/i);
+			expect(r.message).not.toMatch(/timed out|proceed|fail/i);
 		});
 	});
 
@@ -107,6 +127,19 @@ describe("checkGate", () => {
 			expect(r.message).toMatch(/timed out/i);
 			expect(r.message).not.toMatch(/fix them/i);
 		});
+
+		it("blocks on cancellation — preserves cancellation message", async () => {
+			const r = await checkGate(
+				"green",
+				"refactor",
+				makeRunner(false, undefined, true),
+				testConfig,
+			);
+			expect(r.passed).toBe(false);
+			expect(r.cancelled).toBe(true);
+			expect(r.message).toMatch(/cancelled/i);
+			expect(r.message).not.toMatch(/timed out|fix them/i);
+		});
 	});
 
 	describe("refactor → red (tests must pass)", () => {
@@ -143,6 +176,19 @@ describe("checkGate", () => {
 			expect(r.timeout).toBe(true);
 			expect(r.message).toMatch(/timed out/i);
 			expect(r.message).not.toMatch(/fix them/i);
+		});
+
+		it("blocks on cancellation — preserves cancellation message", async () => {
+			const r = await checkGate(
+				"refactor",
+				"red",
+				makeRunner(false, undefined, true),
+				testConfig,
+			);
+			expect(r.passed).toBe(false);
+			expect(r.cancelled).toBe(true);
+			expect(r.message).toMatch(/cancelled/i);
+			expect(r.message).not.toMatch(/timed out|fix them/i);
 		});
 	});
 

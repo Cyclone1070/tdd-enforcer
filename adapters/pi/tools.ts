@@ -40,7 +40,7 @@ export interface NextPhaseDeps {
 	getNudgePrompt: typeof getNudgePrompt;
 	asyncExec: (
 		command: string,
-		options?: { cwd?: string; timeout?: number },
+		options?: { cwd?: string; timeout?: number; signal?: AbortSignal },
 	) => Promise<{ stdout: string; stderr: string }>;
 	tddLog: typeof tddLog;
 }
@@ -118,6 +118,7 @@ export async function executeNextPhase(
 
 	deps.tddLog(tddDir, "INFO", "next_tdd_phase: starting", { from, to });
 
+	const signal = ctx.signal;
 	const testRunner: TestRunner = async (commands, timeout) => {
 		const results = await Promise.all(
 			commands.map(async (cmd) => {
@@ -125,21 +126,36 @@ export async function executeNextPhase(
 					await deps.asyncExec(cmd, {
 						cwd: root,
 						timeout: timeout * 1000,
+						signal,
 					});
 					return { command: cmd, passed: true, timedOut: false } as const;
 				} catch (err) {
-					const timedOut = (err as any)?.killed === true;
+					const killed = (err as any)?.killed === true;
+					const cancelled = signal?.aborted === true;
+					const timedOut = killed && !cancelled;
 					return {
 						command: cmd,
 						passed: false,
 						timedOut,
+						cancelled,
 					} as const;
 				}
 			}),
 		);
 
+		const cancelled = results.filter((r) => (r as any).cancelled === true);
 		const timedOut = results.filter((r) => r.timedOut);
-		const failed = results.filter((r) => !r.passed && !r.timedOut);
+		const failed = results.filter(
+			(r) => !r.passed && !r.timedOut && !(r as any).cancelled,
+		);
+
+		if (cancelled.length > 0) {
+			return {
+				passed: false,
+				cancelled: true,
+				message: `Test execution was cancelled.\n${cancelled.map((f) => `  - ${f.command}`).join("\n")}`,
+			};
+		}
 
 		if (timedOut.length > 0) {
 			return {
