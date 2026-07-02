@@ -1,6 +1,6 @@
 {
 	"name": "tdd-enforcer",
-	"version": "0.3.6",
+	"version": "0.3.7",
 	"type": "module",
 	"description": "TDD enforcer extension for the pi coding agent — enforces Red-Green-Refactor phases with file access restrictions and transition gates",
 	"license": "MIT",
