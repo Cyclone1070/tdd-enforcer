@@ -13,8 +13,8 @@ import {
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
 const CONFIG = {
-	blockedInRed: ["tests/**/*.test.ts"],
-	blockedInGreen: ["src/**/*.ts"],
+	implFiles: ["tests/**/*.test.ts"],
+	testFiles: ["src/**/*.ts"],
 	testCommands: ["npm test"],
 	timeoutSeconds: 30,
 };

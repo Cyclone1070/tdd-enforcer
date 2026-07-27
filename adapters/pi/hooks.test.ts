@@ -30,8 +30,8 @@ function makeResultDeps(overrides: Record<string, unknown> = {}) {
 }
 
 const VALID_CONFIG = {
-	blockedInRed: ["src/**/*.ts"],
-	blockedInGreen: ["tests/**/*.test.ts"],
+	implFiles: ["src/**/*.ts"],
+	testFiles: ["tests/**/*.test.ts"],
 	testCommands: ["npm test"],
 	timeoutSeconds: 30,
 };
@@ -337,6 +337,93 @@ describe("handleToolCall", () => {
 			"refactor",
 			VALID_CONFIG,
 		);
+	});
+
+	describe("hasRedSnapshot bypass in GREEN", () => {
+		let mockFindRedHash: ReturnType<typeof vi.fn>;
+
+		beforeEach(() => {
+			vi.clearAllMocks();
+			mockFindRedHash = vi.fn();
+		});
+
+		it("passes through all tools when hasRedSnapshot=true and phase=green", async () => {
+			mockLoadTddState.mockReturnValue(enabledTddState({ current: "green" }));
+			mockFindRedHash.mockReturnValue("abc123");
+
+			const result = await handleToolCall(
+				{
+					toolCallId: "1",
+					toolName: "write",
+					input: { path: "/x/tests/foo.test.ts" },
+				},
+				{ cwd: "/x" } as any,
+				makeCallDeps({ findRedHash: mockFindRedHash }),
+			);
+
+			expect(result).toBeUndefined();
+			// Should bypass isAllowed entirely
+			expect(mockIsAllowed).not.toHaveBeenCalled();
+		});
+
+		it("still blocks test files in green when hasRedSnapshot=false", async () => {
+			mockLoadTddState.mockReturnValue(enabledTddState({ current: "green" }));
+			mockFindRedHash.mockReturnValue(null);
+			mockIsAllowed.mockReturnValue(false);
+
+			const result = await handleToolCall(
+				{
+					toolCallId: "1",
+					toolName: "write",
+					input: { path: "/x/tests/foo.test.ts" },
+				},
+				{ cwd: "/x" } as any,
+				makeCallDeps({ findRedHash: mockFindRedHash }),
+			);
+
+			expect(result).toEqual({
+				block: true,
+				reason: expect.stringContaining("GREEN"),
+			});
+		});
+
+		it("still blocks in red regardless of hasRedSnapshot", async () => {
+			mockLoadTddState.mockReturnValue(enabledTddState({ current: "red" }));
+			mockFindRedHash.mockReturnValue("abc123");
+			mockIsAllowed.mockReturnValue(false);
+
+			const result = await handleToolCall(
+				{
+					toolCallId: "1",
+					toolName: "write",
+					input: { path: "/x/src/main.ts" },
+				},
+				{ cwd: "/x" } as any,
+				makeCallDeps({ findRedHash: mockFindRedHash }),
+			);
+
+			expect(result).toEqual({
+				block: true,
+				reason: expect.stringContaining("RED"),
+			});
+		});
+
+		it("uses findRedHash from deps if provided", async () => {
+			mockLoadTddState.mockReturnValue(enabledTddState({ current: "green" }));
+			mockFindRedHash.mockReturnValue("abc123");
+
+			await handleToolCall(
+				{
+					toolCallId: "1",
+					toolName: "write",
+					input: { path: "/x/any/file.ts" },
+				},
+				{ cwd: "/x" } as any,
+				makeCallDeps({ findRedHash: mockFindRedHash }),
+			);
+
+			expect(mockFindRedHash).toHaveBeenCalledWith("/x");
+		});
 	});
 });
 

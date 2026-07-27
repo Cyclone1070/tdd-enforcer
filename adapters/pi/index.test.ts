@@ -8,8 +8,8 @@ import {
 } from "./index.js";
 
 const config = {
-	blockedInRed: ["tests/**/*.test.ts"],
-	blockedInGreen: ["src/**/*.ts"],
+	implFiles: ["tests/**/*.test.ts"],
+	testFiles: ["src/**/*.ts"],
 	testCommands: ["npm test"],
 	timeoutSeconds: 30,
 };

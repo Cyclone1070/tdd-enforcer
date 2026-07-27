@@ -32,15 +32,16 @@ It locks files per phase — only test files in RED, only implementation files i
 
 ```json
 {
-  "blockedInRed":   ["src/**/*.ts", "lib/**/*.ts", "!src/**/*.test.ts"],
-  "blockedInGreen": ["**/*.test.ts"],
+  "implFiles":      ["src/**/*.ts", "lib/**/*.ts", "!src/**/*.test.ts"],
+  "testFiles":      ["**/*.test.ts"],
   "testCommands":   ["npm test"],
   "timeoutSeconds": 30
 }
 ```
 
-- `blockedInRed` — globs the agent **cannot** modify in RED phase (implementation files)
-- `blockedInGreen` — globs the agent **cannot** modify in GREEN phase (test files)
+- `implFiles` — globs the agent **cannot** modify in RED phase (implementation files)
+- `testFiles` — globs the agent **cannot** modify in GREEN phase (test files)
+- `blockedInRed`/`blockedInGreen` are deprecated aliases — both work but docs use new names
 - `!` exclusion prefix — optional, carves out subsets from a block list at init time. E.g. `!src/**/*.test.ts` excludes co-located test files from `blockedInRed` so the agent can write them in RED phase
 - `testCommands` — determines if a phase transition passes. Exit 0 passes, non-zero blocks. **Runs in parallel** — all entries are started concurrently. Use `&&` inside a single string entry to chain multiple commands in one step (e.g. `"npm run build && npm test"`). Do not rely on array ordering for dependency chains; put dependent commands in the same string entry with `&&`.
 
@@ -54,18 +55,20 @@ It locks files per phase — only test files in RED, only implementation files i
 ## Phase Rules
 
 ### RED
-Files matching `blockedInRed` are locked — everything else is free.
+Files matching `implFiles` are locked — everything else is free.
 
 Write failing tests for one feature at a time. Think about what could go wrong and test for it — don't just verify the happy path, cover unhappy paths and edge cases too. Minimise the scope of each TDD cycle so reverting is cheap and safe if assumptions turn out wrong.
 
 Call `next_tdd_phase` once tests fail.
 
 ### GREEN
-Files matching `blockedInGreen` are locked — everything else is free.
+When a RED snapshot exists (a `tdd: red` commit in the private git history), **all files are free** — `testFiles` locks are bypassed. You can fix incorrect tests without losing implementation work.
+
+Without a RED snapshot (first cycle or after `previous_tdd_phase`), files matching `testFiles` are locked — everything else is free.
 
 Write the simplest code that makes the failing tests pass — nothing more. The tests are your spec; if they pass, you're done.
 
-If the RED phase tests were wrong, call `previous_tdd_phase` to go back and fix them before implementing. All current changes are lost, but that's better since the current changes was building on false assumptions. Don't be afraid to discard — clean slate beats patched code.
+If the RED phase tests were wrong and no RED snapshot exists, call `previous_tdd_phase` to go back and fix them. All current changes are lost, but that's better since you were building on false assumptions.
 
 Call `next_tdd_phase` once all tests pass.
 

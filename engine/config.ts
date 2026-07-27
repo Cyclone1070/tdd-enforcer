@@ -13,20 +13,23 @@ export function loadConfig(projectRoot: string): Config {
 	const raw = readFileSync(path, "utf-8");
 	const parsed = JSON.parse(raw);
 
-	if (!Array.isArray(parsed.blockedInRed) || parsed.blockedInRed.length === 0) {
-		throw new Error("rules.json: blockedInRed must be a non-empty array");
+	// Accept both new (implFiles/testFiles) and old (blockedInRed/blockedInGreen) names
+	const implFilesField = "implFiles" in parsed ? "implFiles" : "blockedInRed";
+	const testFilesField = "testFiles" in parsed ? "testFiles" : "blockedInGreen";
+	const implFiles = parsed.implFiles ?? parsed.blockedInRed;
+	const testFiles = parsed.testFiles ?? parsed.blockedInGreen;
+
+	if (!Array.isArray(implFiles) || implFiles.length === 0) {
+		throw new Error(`rules.json: ${implFilesField} must be a non-empty array`);
 	}
-	if (!parsed.blockedInRed.every((p: unknown) => typeof p === "string")) {
-		throw new Error("rules.json: blockedInRed must contain only strings");
+	if (!implFiles.every((p: unknown) => typeof p === "string")) {
+		throw new Error(`rules.json: ${implFilesField} must contain only strings`);
 	}
-	if (
-		!Array.isArray(parsed.blockedInGreen) ||
-		parsed.blockedInGreen.length === 0
-	) {
-		throw new Error("rules.json: blockedInGreen must be a non-empty array");
+	if (!Array.isArray(testFiles) || testFiles.length === 0) {
+		throw new Error(`rules.json: ${testFilesField} must be a non-empty array`);
 	}
-	if (!parsed.blockedInGreen.every((p: unknown) => typeof p === "string")) {
-		throw new Error("rules.json: blockedInGreen must contain only strings");
+	if (!testFiles.every((p: unknown) => typeof p === "string")) {
+		throw new Error(`rules.json: ${testFilesField} must contain only strings`);
 	}
 	if (!Array.isArray(parsed.testCommands) || parsed.testCommands.length === 0) {
 		throw new Error("rules.json: testCommands must be a non-empty array");
@@ -36,8 +39,8 @@ export function loadConfig(projectRoot: string): Config {
 	}
 
 	return {
-		blockedInRed: parsed.blockedInRed,
-		blockedInGreen: parsed.blockedInGreen,
+		implFiles,
+		testFiles,
 		testCommands: parsed.testCommands,
 		timeoutSeconds: parsed.timeoutSeconds ?? 120,
 	};

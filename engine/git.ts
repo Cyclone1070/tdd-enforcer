@@ -290,6 +290,26 @@ export function changesSince(
 	return [...new Set([...files, ...untracked])];
 }
 
+/**
+ * Find the most recent "tdd: red" commit hash.
+ * Returns null if no such commit exists.
+ */
+export function findRedHash(
+	projectRoot: string,
+	deps: GitDeps = defaultDeps,
+): string | null {
+	try {
+		const out = gitExec(
+			'log --format=%H --grep="^tdd: red$" --max-count=1',
+			projectRoot,
+			deps,
+		).trim();
+		return out || null;
+	} catch {
+		return null;
+	}
+}
+
 /** Hard reset — discard all uncommitted changes (tracked and untracked), keep HEAD. */
 export function resetHard(
 	projectRoot: string,

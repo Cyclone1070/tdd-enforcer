@@ -6,8 +6,8 @@ export interface PhaseState {
 }
 
 export interface Config {
-	blockedInRed: string[];
-	blockedInGreen: string[];
+	implFiles: string[];
+	testFiles: string[];
 	testCommands: string[];
 	timeoutSeconds: number;
 }

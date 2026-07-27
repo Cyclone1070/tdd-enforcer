@@ -1,8 +1,11 @@
+export type { CachedCheckResult } from "./cached-check.js";
+export { runCachedCheck } from "./cached-check.js";
 export { loadConfig } from "./config.js";
 export { disallowedFiles, isAllowed } from "./enforce.js";
 export {
 	changesSince,
 	changesSinceSnapshot,
+	findRedHash,
 	gitStashCreate,
 	hasParent,
 	headHash,

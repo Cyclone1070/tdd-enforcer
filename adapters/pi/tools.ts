@@ -289,8 +289,8 @@ export async function executeTddStatus(
 		details: {
 			enabled: state.enabled,
 			phase: state.current,
-			blockedInRed: config.blockedInRed,
-			blockedInGreen: config.blockedInGreen,
+			implFiles: config.implFiles,
+			testFiles: config.testFiles,
 			testCommands: config.testCommands,
 		},
 	};
