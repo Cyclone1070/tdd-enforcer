@@ -1,10 +1,6 @@
 import type { Config, Phase } from "./types.js";
 
-export function getNudgePrompt(
-	phase: Phase,
-	config: Config,
-	hasRedSnapshot = false,
-): string {
+export function getNudgePrompt(phase: Phase, config: Config): string {
 	const redBlock = config.implFiles.join(", ");
 	const greenBlock = config.testFiles.join(", ");
 
@@ -19,16 +15,6 @@ export function getNudgePrompt(
 				"Minimise the scope of each TDD cycle so reverting is cheap."
 			);
 		case "green":
-			if (hasRedSnapshot) {
-				return (
-					"You are now in **GREEN** phase. Implement features.\n" +
-					"All files are free to modify (except .pi/tdd/ — always locked) — test files are unlocked. " +
-					"Call `next_tdd_phase` to proceed to REFACTOR.\n" +
-					"Write minimal code to make the failing tests pass — nothing more.\n" +
-					"If the RED phase tests were wrong, fix them here — the cached check at the gate " +
-					"verifies test changes against RED code."
-				);
-			}
 			return (
 				`You are now in **GREEN** phase. Implement features.\n` +
 				`Blocked files: ${greenBlock}\n` +

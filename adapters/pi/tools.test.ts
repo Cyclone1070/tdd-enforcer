@@ -29,7 +29,6 @@ describe("executeNextPhase", () => {
 	let mockSnapshot: ReturnType<typeof vi.fn>;
 	let mockSavePhaseState: ReturnType<typeof vi.fn>;
 	let mockGetNudgePrompt: ReturnType<typeof vi.fn>;
-	let mockFindRedHash: ReturnType<typeof vi.fn>;
 	let mockAsyncExec: ReturnType<typeof vi.fn>;
 	let mockTddLog: ReturnType<typeof vi.fn>;
 
@@ -37,7 +36,6 @@ describe("executeNextPhase", () => {
 		return {
 			loadTddState: mockLoadTddState,
 			nextPhase: mockNextPhase,
-			findRedHash: mockFindRedHash,
 			getDisallowedChanges: mockGetDisallowedChanges,
 			checkGate: mockCheckGate,
 			snapshot: mockSnapshot,
@@ -58,7 +56,6 @@ describe("executeNextPhase", () => {
 		mockSnapshot = vi.fn().mockReturnValue("hash123");
 		mockSavePhaseState = vi.fn();
 		mockGetNudgePrompt = vi.fn().mockReturnValue("");
-		mockFindRedHash = vi.fn().mockReturnValue(null);
 		mockAsyncExec = vi.fn();
 		mockTddLog = vi.fn();
 
