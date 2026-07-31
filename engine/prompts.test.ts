@@ -40,6 +40,16 @@ describe("getNudgePrompt", () => {
 		);
 	});
 
+	it("GREEN prompt with RED snapshot: tests unlocked, .pi/tdd still locked, fix tests in GREEN", () => {
+		const result = getNudgePrompt("green", config, true);
+		expect(result).not.toContain("Blocked files:");
+		expect(result).not.toContain("previous_tdd_phase");
+		expect(result).toContain("test files are unlocked");
+		expect(result).toContain(".pi/tdd/ — always locked");
+		expect(result).toContain("fix them here");
+		expect(result).toContain("cached check");
+	});
+
 	it("returns REFACTOR prompt when phase is refactor", () => {
 		const result = getNudgePrompt("refactor", config);
 		expect(result).toBe(

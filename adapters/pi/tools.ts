@@ -13,6 +13,7 @@ import type { Phase, TestRunner } from "../../engine/index.js";
 import {
 	advancePhase,
 	checkGate,
+	findRedHash,
 	getDisallowedChanges,
 	getNudgePrompt,
 	getStatusInfo,
@@ -33,6 +34,7 @@ import {
 export interface NextPhaseDeps {
 	loadTddState: typeof loadTddState;
 	nextPhase: typeof nextPhase;
+	findRedHash: typeof findRedHash;
 	getDisallowedChanges: typeof getDisallowedChanges;
 	checkGate: typeof checkGate;
 	snapshot: typeof snapshot;
@@ -65,6 +67,7 @@ export interface TddStatusDeps {
 const defaultNextPhaseDeps: NextPhaseDeps = {
 	loadTddState,
 	nextPhase,
+	findRedHash,
 	getDisallowedChanges,
 	checkGate,
 	snapshot,
@@ -199,7 +202,12 @@ export async function executeNextPhase(
 	});
 
 	return {
-		content: [{ type: "text", text: `\n${deps.getNudgePrompt(to, config)}` }],
+		content: [
+			{
+				type: "text",
+				text: `\n${deps.getNudgePrompt(to, config, deps.findRedHash(root) !== null)}`,
+			},
+		],
 		details: {},
 	};
 }
