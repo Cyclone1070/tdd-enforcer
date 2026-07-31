@@ -10,7 +10,6 @@ import {
 import { isAllowed } from "../../engine/enforce.js";
 import {
 	changesSince,
-	findRedHash,
 	gitStashCreate,
 	restoreFilesTo,
 } from "../../engine/git.js";
@@ -22,7 +21,6 @@ export async function handleToolCall(
 	ctx: ExtensionContext,
 	deps: {
 		loadTddState: typeof loadTddState;
-		findRedHash?: typeof findRedHash;
 		gitStashCreate: typeof gitStashCreate;
 		isAllowed: typeof isAllowed;
 		tddLog: typeof tddLog;
@@ -33,7 +31,6 @@ export async function handleToolCall(
 		>;
 	} = {
 		loadTddState,
-		findRedHash,
 		gitStashCreate,
 		isAllowed,
 		tddLog,
@@ -65,23 +62,6 @@ export async function handleToolCall(
 		return;
 	}
 	const phase = state.current;
-	const frh = deps.findRedHash ?? findRedHash;
-	const hasRedSnapshot = frh(root) !== null;
-
-	// When RED snapshot exists, all files are permitted in GREEN.
-	// The cached check at transition verifies test integrity instead.
-	if (phase === "green" && hasRedSnapshot) {
-		deps.tddLog(
-			tddDir,
-			"DEBUG",
-			"tool_call: RED snapshot exists, all files permitted in GREEN",
-			{
-				toolName: (event as any).toolName,
-				relPath: relative(root, (event as any).input?.path ?? ""),
-			},
-		);
-		return;
-	}
 
 	// Bash: stash pre-command state for per-command diff later
 	if ((event as any).toolName === "bash") {

@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { GitDeps } from "./git.js";
 import {
 	changesSinceSnapshot,
-	findRedHash,
 	gitStashCreate,
 	hasParent,
 	headHash,
@@ -549,56 +548,5 @@ describe("stageFiles", () => {
 		const call = (deps.execSync as any).mock.calls[0];
 		expect(call[0]).toContain(".pi/tdd/state.json");
 		expect(call[0]).not.toContain(".pi/tdd/rules.json");
-	});
-});
-
-describe("findRedHash", () => {
-	let deps: GitDeps;
-	let outputs: Record<string, string>;
-
-	function makeDeps(): GitDeps {
-		const mockExecSync = vi.fn((cmd: string) => {
-			for (const [prefix, out] of Object.entries(outputs)) {
-				if (cmd.includes(prefix)) return Buffer.from(out);
-			}
-			return Buffer.from("");
-		});
-		return {
-			execSync: mockExecSync as any,
-			existsSync: vi.fn().mockReturnValue(false),
-			mkDirSync: vi.fn(),
-			writeFileSync: vi.fn(),
-			unlinkSync: vi.fn(),
-			rmSync: vi.fn(),
-		};
-	}
-
-	beforeEach(() => {
-		outputs = {};
-		deps = makeDeps();
-	});
-
-	it("returns hash when a tdd: red commit exists", () => {
-		outputs['log --format=%H --grep="^tdd: red$" --max-count=1'] =
-			"abc123def456\n";
-		expect(findRedHash("/test", deps)).toBe("abc123def456");
-	});
-
-	it("returns null when git log returns empty (no tdd: red)", () => {
-		// No output set for the red-hash command → returns empty string
-		expect(findRedHash("/test", deps)).toBeNull();
-	});
-
-	it("returns null when git command throws (not a repo)", () => {
-		const badDeps = makeDeps();
-		badDeps.execSync = vi.fn(() => {
-			throw new Error("fatal: not a git repository");
-		}) as any;
-		expect(findRedHash("/test", badDeps)).toBeNull();
-	});
-
-	it("returns null when only non-red commits exist (init, green, etc)", () => {
-		outputs['log --format=%H --grep="^tdd: red$" --max-count=1'] = "";
-		expect(findRedHash("/test", deps)).toBeNull();
 	});
 });

@@ -133,8 +133,8 @@ export async function handleTddStatus(
 	const { state, config } = result;
 	const enabledStr = state.enabled ? "enabled" : "disabled";
 	const phaseStr = state.current.toUpperCase();
-	const redBlk = config.implFiles.join(", ") || "(none)";
-	const greenBlk = config.testFiles.join(", ") || "(none)";
+	const redBlk = config.blockedInRed.join(", ") || "(none)";
+	const greenBlk = config.blockedInGreen.join(", ") || "(none)";
 	const commands = config.testCommands.join(", ") || "(none)";
 
 	deps.tddLog(tddDir, "INFO", "tdd:status: queried", {

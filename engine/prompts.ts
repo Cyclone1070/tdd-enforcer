@@ -1,8 +1,8 @@
 import type { Config, Phase } from "./types.js";
 
 export function getNudgePrompt(phase: Phase, config: Config): string {
-	const redBlock = config.implFiles.join(", ");
-	const greenBlock = config.testFiles.join(", ");
+	const redBlock = config.blockedInRed.join(", ");
+	const greenBlock = config.blockedInGreen.join(", ");
 
 	switch (phase) {
 		case "red":

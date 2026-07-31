@@ -35,20 +35,18 @@ function matchPatterns(patterns: string[], filePath: string): boolean {
  *
  * Rules:
  * - REFACTOR: everything allowed
- * - RED: files in implFiles are blocked, everything else is free
- * - GREEN: files in testFiles are blocked, everything else is free
+ * - RED: files in blockedInRed are blocked, everything else is free
+ * - GREEN: files in blockedInGreen are blocked, everything else is free
  * - ! negation patterns exclude subsets from a block list
  */
 export function isAllowed(
 	filePath: string,
 	phase: Phase,
 	config: Config,
-	hasRedSnapshot: boolean = false,
 ): boolean {
 	if (phase === "refactor") return true;
-	if (phase === "green" && hasRedSnapshot) return true;
 
-	const blocked = phase === "red" ? config.implFiles : config.testFiles;
+	const blocked = phase === "red" ? config.blockedInRed : config.blockedInGreen;
 	return !matchPatterns(blocked, filePath);
 }
 
@@ -59,8 +57,7 @@ export function disallowedFiles(
 	files: string[],
 	phase: Phase,
 	config: Config,
-	hasRedSnapshot: boolean = false,
 ): string[] {
 	if (phase === "refactor") return [];
-	return files.filter((f) => !isAllowed(f, phase, config, hasRedSnapshot));
+	return files.filter((f) => !isAllowed(f, phase, config));
 }

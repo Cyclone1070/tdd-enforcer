@@ -3,15 +3,15 @@ import { getNudgePrompt } from "./prompts.js";
 import type { Config } from "./types.js";
 
 const config: Config = {
-	implFiles: ["tests/**/*.test.ts"],
-	testFiles: ["src/**/*.ts"],
+	blockedInRed: ["tests/**/*.test.ts"],
+	blockedInGreen: ["src/**/*.ts"],
 	testCommands: ["npm test"],
 	timeoutSeconds: 30,
 };
 
 const emptyConfig: Config = {
-	implFiles: [],
-	testFiles: [],
+	blockedInRed: [],
+	blockedInGreen: [],
 	testCommands: [],
 	timeoutSeconds: 30,
 };
@@ -61,7 +61,7 @@ describe("getNudgePrompt", () => {
 	it("shows multiple blocked files comma-separated in RED", () => {
 		const cfg: Config = {
 			...config,
-			implFiles: ["*.ts", "*.json", "src/**"],
+			blockedInRed: ["*.ts", "*.json", "src/**"],
 		};
 		const result = getNudgePrompt("red", cfg);
 		expect(result).toContain("Blocked files: *.ts, *.json, src/**");
@@ -70,7 +70,7 @@ describe("getNudgePrompt", () => {
 	it("shows multiple blocked files comma-separated in GREEN", () => {
 		const cfg: Config = {
 			...config,
-			testFiles: ["*.test.ts", "*.spec.ts"],
+			blockedInGreen: ["*.test.ts", "*.spec.ts"],
 		};
 		const result = getNudgePrompt("green", cfg);
 		expect(result).toContain("Blocked files: *.test.ts, *.spec.ts");

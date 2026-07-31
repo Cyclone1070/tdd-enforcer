@@ -45,8 +45,8 @@ function makeRunner(
 }
 
 const testConfig: Config = {
-	implFiles: [],
-	testFiles: [],
+	blockedInRed: [],
+	blockedInGreen: [],
 	testCommands: ["npm test"],
 	timeoutSeconds: 30,
 };
@@ -232,8 +232,8 @@ describe("checkGate", () => {
 // ── Pure unit tests: getDisallowedChanges ────────────────────────────────────
 
 const denyConfig: Config = {
-	implFiles: ["src/**/*.ts"],
-	testFiles: ["tests/**/*.test.ts"],
+	blockedInRed: ["src/**/*.ts"],
+	blockedInGreen: ["tests/**/*.test.ts"],
 	testCommands: [],
 	timeoutSeconds: 30,
 };
@@ -280,7 +280,7 @@ describe("getDisallowedChanges", () => {
 			"tests/foo.test.ts",
 			"README.md",
 		]);
-		const matchBlockedInRed = picomatch(denyConfig.implFiles);
+		const matchBlockedInRed = picomatch(denyConfig.blockedInRed);
 		mockDisallowedFiles.mockImplementation(
 			(changed: string[], phase: string) => {
 				if (phase === "red") {
@@ -306,7 +306,7 @@ describe("getDisallowedChanges", () => {
 			"src/main.ts",
 			"package.json",
 		]);
-		const matchBlockedInGreen = picomatch(denyConfig.testFiles);
+		const matchBlockedInGreen = picomatch(denyConfig.blockedInGreen);
 		mockDisallowedFiles.mockImplementation(
 			(changed: string[], phase: string) => {
 				if (phase === "green") {
@@ -328,7 +328,7 @@ describe("getDisallowedChanges", () => {
 
 	it("catches untracked files, not just modified", () => {
 		mockChangesSinceSnapshot.mockReturnValue(["src/new.ts"]);
-		const matchBlockedInRed = picomatch(denyConfig.implFiles);
+		const matchBlockedInRed = picomatch(denyConfig.blockedInRed);
 		mockDisallowedFiles.mockImplementation(
 			(changed: string[], phase: string) => {
 				if (phase === "red") {

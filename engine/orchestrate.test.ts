@@ -3,8 +3,8 @@ import { advancePhase, getStatusInfo, revertPhase } from "./orchestrate.js";
 import type { Config, Phase, PhaseState } from "./types.js";
 
 const CONFIG: Config = {
-	implFiles: ["tests/**/*.test.ts"],
-	testFiles: ["src/**/*.ts"],
+	blockedInRed: ["tests/**/*.test.ts"],
+	blockedInGreen: ["src/**/*.ts"],
 	testCommands: ["npm test"],
 	timeoutSeconds: 30,
 };
@@ -220,173 +220,6 @@ describe("advancePhase", () => {
 	});
 });
 
-describe("cached check for green→refactor", () => {
-	let mockGetDisallowedChanges: ReturnType<typeof vi.fn>;
-	let mockCheckGate: ReturnType<typeof vi.fn>;
-	let mockNextPhase: ReturnType<typeof vi.fn>;
-	let mockSnapshot: ReturnType<typeof vi.fn>;
-	let mockSavePhaseState: ReturnType<typeof vi.fn>;
-	let mockTestRunner: ReturnType<typeof vi.fn>;
-	let mockFindRedHash: ReturnType<typeof vi.fn>;
-	let mockRunCachedCheck: ReturnType<typeof vi.fn>;
-
-	function makeDeps(overrides = {}) {
-		return {
-			getDisallowedChanges: mockGetDisallowedChanges,
-			checkGate: mockCheckGate,
-			nextPhase: mockNextPhase,
-			snapshot: mockSnapshot,
-			savePhaseState: mockSavePhaseState,
-			testRunner: mockTestRunner,
-			findRedHash: mockFindRedHash,
-			runCachedCheck: mockRunCachedCheck,
-			...overrides,
-		};
-	}
-
-	beforeEach(() => {
-		vi.clearAllMocks();
-		mockGetDisallowedChanges = vi.fn().mockReturnValue([]);
-		mockCheckGate = vi.fn().mockResolvedValue({ passed: true, message: "ok" });
-		mockNextPhase = vi
-			.fn()
-			.mockImplementation((p: string) =>
-				p === "red"
-					? "green"
-					: p === "green"
-						? "refactor"
-						: p === "refactor"
-							? "red"
-							: null,
-			);
-		mockSnapshot = vi.fn();
-		mockSavePhaseState = vi.fn();
-		mockTestRunner = vi.fn();
-		mockFindRedHash = vi.fn().mockReturnValue("abc123");
-		mockRunCachedCheck = vi.fn().mockResolvedValue({ passed: true });
-	});
-
-	it("skips allowlist check when red snapshot exists", async () => {
-		const result = await advancePhase(
-			"/test",
-			enabledState("green"),
-			CONFIG,
-			makeDeps(),
-		);
-		expect(mockGetDisallowedChanges).not.toHaveBeenCalled();
-		expect(result.ok).toBe(true);
-	});
-
-	it("still runs allowlist check when no red snapshot exists", async () => {
-		mockFindRedHash.mockReturnValue(null);
-		const result = await advancePhase(
-			"/test",
-			enabledState("green"),
-			CONFIG,
-			makeDeps(),
-		);
-		expect(mockGetDisallowedChanges).toHaveBeenCalled();
-		expect(result.ok).toBe(true);
-	});
-
-	it("runs cached check when red snapshot exists", async () => {
-		await advancePhase("/test", enabledState("green"), CONFIG, makeDeps());
-		expect(mockRunCachedCheck).toHaveBeenCalledWith(
-			"/test",
-			CONFIG,
-			expect.anything(),
-		);
-	});
-
-	it("does not run cached check for red→green", async () => {
-		await advancePhase("/test", enabledState("red"), CONFIG, makeDeps());
-		expect(mockRunCachedCheck).not.toHaveBeenCalled();
-	});
-
-	it("does not run cached check for refactor→red", async () => {
-		await advancePhase("/test", enabledState("refactor"), CONFIG, makeDeps());
-		expect(mockRunCachedCheck).not.toHaveBeenCalled();
-	});
-
-	it("skips cached check when no red snapshot exists", async () => {
-		mockFindRedHash.mockReturnValue(null);
-		await advancePhase("/test", enabledState("green"), CONFIG, makeDeps());
-		expect(mockRunCachedCheck).not.toHaveBeenCalled();
-	});
-
-	it("blocks transition when cached check fails (tests pass against RED)", async () => {
-		mockRunCachedCheck.mockResolvedValue({
-			passed: false,
-			message: "Tests pass against RED code — test changes may be fraudulent.",
-		});
-		const result = await advancePhase(
-			"/test",
-			enabledState("green"),
-			CONFIG,
-			makeDeps(),
-		);
-		expect(result.ok).toBe(false);
-		expect(result.message).toContain("RED code");
-	});
-
-	it("blocks transition with cancellation message", async () => {
-		mockRunCachedCheck.mockResolvedValue({
-			passed: false,
-			cancelled: true,
-			message: "cancelled by user",
-		});
-		const result = await advancePhase(
-			"/test",
-			enabledState("green"),
-			CONFIG,
-			makeDeps(),
-		);
-		expect(result.ok).toBe(false);
-		expect(result.message).toContain("Cancelled");
-	});
-
-	it("blocks transition with timeout message", async () => {
-		mockRunCachedCheck.mockResolvedValue({
-			passed: false,
-			timeout: true,
-			message: "timed out after 30s",
-		});
-		const result = await advancePhase(
-			"/test",
-			enabledState("green"),
-			CONFIG,
-			makeDeps(),
-		);
-		expect(result.ok).toBe(false);
-		expect(result.message).toContain("timed out");
-	});
-
-	it("proceeds to gate check when cached check passes", async () => {
-		mockRunCachedCheck.mockResolvedValue({ passed: true });
-		const result = await advancePhase(
-			"/test",
-			enabledState("green"),
-			CONFIG,
-			makeDeps(),
-		);
-		expect(result.ok).toBe(true);
-		expect(mockCheckGate).toHaveBeenCalled();
-	});
-
-	it("proceeds normally when cached check is skipped (no red hash)", async () => {
-		mockFindRedHash.mockReturnValue(null);
-		const result = await advancePhase(
-			"/test",
-			enabledState("green"),
-			CONFIG,
-			makeDeps(),
-		);
-		expect(result.ok).toBe(true);
-		expect(mockRunCachedCheck).not.toHaveBeenCalled();
-		expect(mockCheckGate).toHaveBeenCalled();
-	});
-});
-
 describe("revertPhase", () => {
 	let mockHasParent: ReturnType<typeof vi.fn>;
 	let mockHeadMessage: ReturnType<typeof vi.fn>;
@@ -524,8 +357,8 @@ describe("getStatusInfo", () => {
 		const info = getStatusInfo(
 			{ enabled: true, current: "red" },
 			{
-				implFiles: ["tests/**/*.test.ts"],
-				testFiles: ["src/**/*.ts"],
+				blockedInRed: ["tests/**/*.test.ts"],
+				blockedInGreen: ["src/**/*.ts"],
 				testCommands: ["npm test"],
 				timeoutSeconds: 30,
 			},
@@ -535,7 +368,6 @@ describe("getStatusInfo", () => {
 				"Current phase: RED\n" +
 				"Blocked in RED: tests/**/*.test.ts\n" +
 				"Blocked in GREEN: src/**/*.ts\n" +
-				"Cached check: src/**/*.ts\n" +
 				"Test commands: npm test",
 		);
 	});
@@ -544,8 +376,8 @@ describe("getStatusInfo", () => {
 		const info = getStatusInfo(
 			{ enabled: false, current: "red" },
 			{
-				implFiles: [],
-				testFiles: [],
+				blockedInRed: [],
+				blockedInGreen: [],
 				testCommands: [],
 				timeoutSeconds: 30,
 			},
@@ -555,7 +387,6 @@ describe("getStatusInfo", () => {
 				"Current phase: RED\n" +
 				"Blocked in RED: (none)\n" +
 				"Blocked in GREEN: (none)\n" +
-				"Cached check: (none)\n" +
 				"Test commands: (none)",
 		);
 	});
@@ -564,8 +395,8 @@ describe("getStatusInfo", () => {
 		const info = getStatusInfo(
 			{ enabled: true, current: "green" },
 			{
-				implFiles: [],
-				testFiles: [],
+				blockedInRed: [],
+				blockedInGreen: [],
 				testCommands: [],
 				timeoutSeconds: 30,
 			},
@@ -577,8 +408,8 @@ describe("getStatusInfo", () => {
 		const info = getStatusInfo(
 			{ enabled: true, current: "refactor" },
 			{
-				implFiles: [],
-				testFiles: [],
+				blockedInRed: [],
+				blockedInGreen: [],
 				testCommands: [],
 				timeoutSeconds: 30,
 			},
@@ -590,8 +421,8 @@ describe("getStatusInfo", () => {
 		const info = getStatusInfo(
 			{ enabled: true, current: "red" },
 			{
-				implFiles: ["*.ts", "*.json", "src/**"],
-				testFiles: [],
+				blockedInRed: ["*.ts", "*.json", "src/**"],
+				blockedInGreen: [],
 				testCommands: [],
 				timeoutSeconds: 30,
 			},
@@ -603,38 +434,12 @@ describe("getStatusInfo", () => {
 		const info = getStatusInfo(
 			{ enabled: true, current: "red" },
 			{
-				implFiles: [],
-				testFiles: [],
+				blockedInRed: [],
+				blockedInGreen: [],
 				testCommands: ["npx vitest run", "npm run lint"],
 				timeoutSeconds: 30,
 			},
 		);
 		expect(info).toContain("Test commands: npx vitest run, npm run lint");
-	});
-
-	it("shows cached check line when testFiles has patterns", () => {
-		const info = getStatusInfo(
-			{ enabled: true, current: "green" },
-			{
-				implFiles: ["src/**/*.ts"],
-				testFiles: ["tests/**/*.test.ts"],
-				testCommands: ["npm test"],
-				timeoutSeconds: 30,
-			},
-		);
-		expect(info).toContain("Cached check: tests/**/*.test.ts");
-	});
-
-	it("shows (none) for cached check when testFiles is empty", () => {
-		const info = getStatusInfo(
-			{ enabled: true, current: "green" },
-			{
-				implFiles: [],
-				testFiles: [],
-				testCommands: [],
-				timeoutSeconds: 30,
-			},
-		);
-		expect(info).toContain("Cached check: (none)");
 	});
 });

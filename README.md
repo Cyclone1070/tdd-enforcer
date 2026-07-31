@@ -50,8 +50,8 @@ Once configured, run:
 
 | Field | Description |
 |-------|-------------|
-| `implFiles` | Globs the agent **cannot** touch in RED phase (implementation files) |
-| `testFiles` | Globs the agent **cannot** touch in GREEN phase (test files) |
+| `blockedInRed` | Globs the agent **cannot** touch in RED phase (implementation files) |
+| `blockedInGreen` | Globs the agent **cannot** touch in GREEN phase (test files) |
 | `!` prefix | Exclusion: carves out subsets from a block (e.g. co-located test files) |
 | `testCommands` | Commands run in parallel for gate checks. Exit 0 = pass, non-zero = block. Use `&&` inside a single entry to chain dependent steps |
 | `timeoutSeconds` | Test timeout per command (default: 120) |
@@ -102,20 +102,6 @@ Every phase transition runs two validations before advancing:
    - RED→GREEN: all commands must fail (a passing test suite means there's no failing test to justify moving to GREEN)
    - GREEN→REFACTOR: all commands must pass
    - REFACTOR→RED: all commands must pass
-
-#### Cached check (RED→GREEN→REFACTOR)
-
-When a `tdd: red` commit exists (i.e. the cycle advanced from RED to GREEN), test files are **unlocked** in GREEN — the agent can fix incorrect tests without losing implementation work. The GREEN→REFACTOR gate runs an extra check:
-
-1. Checkout RED code into a temp dir
-2. Overlay only the changed test files (`testFiles` patterns)
-3. Run tests against this overlaid RED checkout
-4. **Tests pass against RED code** → test changes may be fraudulent → **blocked**
-5. **Tests fail against RED code** → changes are legitimate → **allowed**
-
-**Known limitations:**
-- **Deleted test files**: if remaining tests all pass against RED code, deletion is treated as fraud (can't distinguish abandoned features from hidden failures)
-- **Masked fraud**: if multiple test files change and at least one legitimately fails against RED, fraud in another file is masked by the aggregate pass/fail signal
 
 If both checks pass, the working tree is snapshotted and the phase advances.
 

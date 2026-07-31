@@ -86,8 +86,8 @@ describe("savePhaseState", () => {
 // ── loadTddState ────────────────────────────────────────────────────────────
 
 const validRules = {
-	implFiles: ["tests/**/*.test.ts"],
-	testFiles: ["src/**/*.ts"],
+	blockedInRed: ["tests/**/*.test.ts"],
+	blockedInGreen: ["src/**/*.ts"],
 	testCommands: ["npm test"],
 	timeoutSeconds: 30,
 };
@@ -229,7 +229,7 @@ describe("loadTddState", () => {
 			expect(result.state.current).toBe("red");
 			expect(result.state.enabled).toBe(true);
 			expect(result.config.testCommands).toEqual(["npm test"]);
-			expect(result.config.implFiles).toEqual(["tests/**/*.test.ts"]);
+			expect(result.config.blockedInRed).toEqual(["tests/**/*.test.ts"]);
 		}
 	});
 

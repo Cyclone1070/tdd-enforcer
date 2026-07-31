@@ -1,6 +1,4 @@
-import { runCachedCheck as realRunCachedCheck } from "./cached-check.js";
 import {
-	findRedHash as realFindRedHash,
 	hasParent as realHasParent,
 	headMessage as realHeadMessage,
 	resetHard as realResetHard,
@@ -25,8 +23,6 @@ export interface AdvanceDeps {
 	nextPhase?: typeof realNextPhase;
 	getDisallowedChanges?: typeof realGetDisallowedChanges;
 	checkGate?: typeof realCheckGate;
-	findRedHash?: typeof realFindRedHash;
-	runCachedCheck?: typeof realRunCachedCheck;
 	snapshot?: typeof realSnapshot;
 	savePhaseState?: typeof realSavePhaseState;
 }
@@ -58,57 +54,34 @@ export async function advancePhase(
 	const np = deps.nextPhase ?? realNextPhase;
 	const gdc = deps.getDisallowedChanges ?? realGetDisallowedChanges;
 	const cg = deps.checkGate ?? realCheckGate;
-	const rcc = deps.runCachedCheck ?? realRunCachedCheck;
-	const frh = deps.findRedHash ?? realFindRedHash;
 	const snap = deps.snapshot ?? realSnapshot;
 	const sps = deps.savePhaseState ?? realSavePhaseState;
 
 	const from = state.current;
 	const to = np(from) as Phase;
-	const hasRedSnapshot = frh(root) !== null;
 
-	// 1. Allowlist check — skipped when RED snapshot exists (all files free in GREEN)
-	if (!hasRedSnapshot) {
-		const violations = gdc(root, from, config);
-		if (violations.length > 0) {
-			return {
-				ok: false,
-				message:
-					`BLOCKED: files not allowed in ${from.toUpperCase()} phase:\n` +
-					violations.map((f) => `  - ${f}`).join("\n") +
-					`\nRevert or remove them before proceeding.\n\nInspect with: cd .pi/tdd && git diff HEAD -- ${violations[0]}`,
-			};
-		}
+	// 1. Allowlist check
+	const violations = gdc(root, from, config);
+	if (violations.length > 0) {
+		return {
+			ok: false,
+			message:
+				`BLOCKED: files not allowed in ${from.toUpperCase()} phase:\n` +
+				violations.map((f) => `  - ${f}`).join("\n") +
+				`\nRevert or remove them before proceeding.\n\nInspect with: cd .pi/tdd && git diff HEAD -- ${violations[0]}`,
+		};
 	}
 
-	// 2. Cached check for GREEN→REFACTOR: verify test changes against RED code
-	const fromGreen = from === "green" && to === "refactor";
-	if (fromGreen && hasRedSnapshot) {
-		const cached = await rcc(root, config, deps.testRunner);
-		if (cached.cancelled) {
-			return { ok: false, message: `Cancelled: ${cached.message}` };
-		}
-		if (cached.timeout) {
-			return {
-				ok: false,
-				message: `Cached check timed out: ${cached.message}`,
-			};
-		}
-		if (!cached.passed) {
-			return { ok: false, message: cached.message };
-		}
-	}
-
-	// 3. Gate check
+	// 2. Gate check
 	const gate = await cg(from, to, deps.testRunner, config);
 	if (!gate.passed) {
 		return { ok: false, message: gate.message };
 	}
 
-	// 4. Snapshot
+	// 3. Snapshot
 	snap(root, from);
 
-	// 5. Save state
+	// 4. Save state
 	const newState: PhaseState = { ...state, current: to };
 	sps(root, newState);
 
@@ -172,9 +145,8 @@ export async function revertPhase(
 export function getStatusInfo(state: PhaseState, config: Config): string {
 	const enabledStr = state.enabled ? "enabled" : "disabled";
 	const phaseStr = state.current.toUpperCase();
-	const redBlk = config.implFiles.join(", ") || "(none)";
-	const greenBlk = config.testFiles.join(", ") || "(none)";
-	const cachedBlk = config.testFiles.join(", ") || "(none)";
+	const redBlk = config.blockedInRed.join(", ") || "(none)";
+	const greenBlk = config.blockedInGreen.join(", ") || "(none)";
 	const commands = config.testCommands.join(", ") || "(none)";
 
 	return (
@@ -182,7 +154,6 @@ export function getStatusInfo(state: PhaseState, config: Config): string {
 		`Current phase: ${phaseStr}\n` +
 		`Blocked in RED: ${redBlk}\n` +
 		`Blocked in GREEN: ${greenBlk}\n` +
-		`Cached check: ${cachedBlk}\n` +
 		`Test commands: ${commands}`
 	);
 }
