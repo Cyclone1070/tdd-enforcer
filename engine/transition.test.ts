@@ -10,12 +10,8 @@ describe("nextPhase", () => {
 		expect(nextPhase("red")).toBe("green");
 	});
 
-	it("returns refactor from green", () => {
-		expect(nextPhase("green")).toBe("refactor");
-	});
-
-	it("returns red from refactor", () => {
-		expect(nextPhase("refactor")).toBe("red");
+	it("returns red from green", () => {
+		expect(nextPhase("green")).toBe("red");
 	});
 
 	it("returns null for unknown phase", () => {
@@ -92,33 +88,23 @@ describe("checkGate", () => {
 		});
 	});
 
-	describe("green → refactor (tests must pass)", () => {
+	describe("green → red (tests must pass)", () => {
 		it("allows when tests pass", async () => {
-			const r = await checkGate(
-				"green",
-				"refactor",
-				makeRunner(true),
-				testConfig,
-			);
+			const r = await checkGate("green", "red", makeRunner(true), testConfig);
 			expect(r.passed).toBe(true);
 			expect(r.message).toMatch(/pass/i);
 		});
 
 		it("blocks when tests fail", async () => {
-			const r = await checkGate(
-				"green",
-				"refactor",
-				makeRunner(false),
-				testConfig,
-			);
+			const r = await checkGate("green", "red", makeRunner(false), testConfig);
 			expect(r.passed).toBe(false);
-			expect(r.message).toMatch(/transitioning to REFACTOR/i);
+			expect(r.message).toMatch(/new RED cycle/i);
 		});
 
 		it("blocks on timeout with timeout message", async () => {
 			const r = await checkGate(
 				"green",
-				"refactor",
+				"red",
 				makeRunner(false, true),
 				testConfig,
 			);
@@ -131,56 +117,6 @@ describe("checkGate", () => {
 		it("blocks on cancellation — preserves cancellation message", async () => {
 			const r = await checkGate(
 				"green",
-				"refactor",
-				makeRunner(false, undefined, true),
-				testConfig,
-			);
-			expect(r.passed).toBe(false);
-			expect(r.cancelled).toBe(true);
-			expect(r.message).toMatch(/cancelled/i);
-			expect(r.message).not.toMatch(/timed out|fix them/i);
-		});
-	});
-
-	describe("refactor → red (tests must pass)", () => {
-		it("allows when tests pass", async () => {
-			const r = await checkGate(
-				"refactor",
-				"red",
-				makeRunner(true),
-				testConfig,
-			);
-			expect(r.passed).toBe(true);
-			expect(r.message).toMatch(/pass/i);
-		});
-
-		it("blocks when tests fail", async () => {
-			const r = await checkGate(
-				"refactor",
-				"red",
-				makeRunner(false),
-				testConfig,
-			);
-			expect(r.passed).toBe(false);
-			expect(r.message).toMatch(/transitioning to RED/i);
-		});
-
-		it("blocks on timeout with timeout message", async () => {
-			const r = await checkGate(
-				"refactor",
-				"red",
-				makeRunner(false, true),
-				testConfig,
-			);
-			expect(r.passed).toBe(false);
-			expect(r.timeout).toBe(true);
-			expect(r.message).toMatch(/timed out/i);
-			expect(r.message).not.toMatch(/fix them/i);
-		});
-
-		it("blocks on cancellation — preserves cancellation message", async () => {
-			const r = await checkGate(
-				"refactor",
 				"red",
 				makeRunner(false, undefined, true),
 				testConfig,
@@ -254,17 +190,6 @@ describe("getDisallowedChanges", () => {
 		vi.clearAllMocks();
 		mockChangesSinceSnapshot = vi.fn().mockReturnValue([]);
 		mockDisallowedFiles = vi.fn().mockReturnValue([]);
-	});
-
-	it("returns empty for refactor phase regardless of git state", () => {
-		const result = getDisallowedChanges(
-			"/any",
-			"refactor",
-			denyConfig,
-			makeDeps(),
-		);
-		expect(result).toEqual([]);
-		expect(mockChangesSinceSnapshot).not.toHaveBeenCalled();
 	});
 
 	it("returns empty when no files changed", () => {

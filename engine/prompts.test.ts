@@ -34,17 +34,9 @@ describe("getNudgePrompt", () => {
 		expect(result).toBe(
 			"You are now in **GREEN** phase. Implement features.\n" +
 				"Blocked files: src/**/*.ts\n" +
-				"All other files are free to modify. Call `next_tdd_phase` to proceed to REFACTOR.\n" +
+				"All other files are free to modify. Call `next_tdd_phase` to start a new RED cycle.\n" +
 				"Write minimal code to make the failing tests pass — nothing more.\n" +
 				"If the RED phase tests were wrong, call `previous_tdd_phase` to go back and fix them.",
-		);
-	});
-
-	it("returns REFACTOR prompt when phase is refactor", () => {
-		const result = getNudgePrompt("refactor", config);
-		expect(result).toBe(
-			"You are now in **REFACTOR** phase. Both test and implementation files are free to modify. " +
-				"Refactor without changing behavior. Call `next_tdd_phase` to start a new RED cycle.",
 		);
 	});
 
@@ -82,9 +74,5 @@ describe("getNudgePrompt", () => {
 
 	it("includes GREEN keyword in green phase prompt", () => {
 		expect(getNudgePrompt("green", config)).toContain("GREEN");
-	});
-
-	it("includes REFACTOR keyword in refactor phase prompt", () => {
-		expect(getNudgePrompt("refactor", config)).toContain("REFACTOR");
 	});
 });

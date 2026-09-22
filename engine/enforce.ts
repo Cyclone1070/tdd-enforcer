@@ -34,7 +34,6 @@ function matchPatterns(patterns: string[], filePath: string): boolean {
  * Check if a file path is allowed to be modified in the current phase.
  *
  * Rules:
- * - REFACTOR: everything allowed
  * - RED: files in blockedInRed are blocked, everything else is free
  * - GREEN: files in blockedInGreen are blocked, everything else is free
  * - ! negation patterns exclude subsets from a block list
@@ -44,8 +43,6 @@ export function isAllowed(
 	phase: Phase,
 	config: Config,
 ): boolean {
-	if (phase === "refactor") return true;
-
 	const blocked = phase === "red" ? config.blockedInRed : config.blockedInGreen;
 	return !matchPatterns(blocked, filePath);
 }
@@ -58,6 +55,5 @@ export function disallowedFiles(
 	phase: Phase,
 	config: Config,
 ): string[] {
-	if (phase === "refactor") return [];
 	return files.filter((f) => !isAllowed(f, phase, config));
 }

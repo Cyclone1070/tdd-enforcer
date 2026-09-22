@@ -394,17 +394,6 @@ describe("handleTddJump", () => {
 		expect(ctx.notifications[0].message).toContain("Skipped to GREEN phase");
 	});
 
-	it("works for refactor from green", async () => {
-		mockLoadTddState.mockReturnValue(tddOk({ current: "green" }));
-		const ctx = makeCtx();
-		await handleTddJump("refactor", ctx, makeDeps());
-		expect(mockSavePhaseState).toHaveBeenCalledWith("/test", {
-			enabled: true,
-			current: "refactor",
-		});
-		expect(ctx.notifications[0].message).toContain("Skipped to REFACTOR phase");
-	});
-
 	it("works for red from green", async () => {
 		mockLoadTddState.mockReturnValue(tddOk({ current: "green" }));
 		const ctx = makeCtx();

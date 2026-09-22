@@ -1,17 +1,23 @@
 import {
 	hasParent as realHasParent,
 	headMessage as realHeadMessage,
+	resetGit as realResetGit,
 	resetHard as realResetHard,
 	snapshot as realSnapshot,
+	stageFiles as realStageFiles,
 	undoLastCommit as realUndoLastCommit,
 } from "./git.js";
-import { savePhaseState as realSavePhaseState } from "./state.js";
+import {
+	savePhaseState as realSavePhaseState,
+	repairHistory,
+} from "./state.js";
 import {
 	checkGate as realCheckGate,
 	getDisallowedChanges as realGetDisallowedChanges,
 	nextPhase as realNextPhase,
 } from "./transition.js";
 import type { Config, Phase, PhaseState } from "./types.js";
+import { parseTddLabel } from "./types.js";
 
 export interface AdvanceResult {
 	ok: boolean;
@@ -33,10 +39,13 @@ export interface RevertDeps {
 	resetHard?: typeof realResetHard;
 	undoLastCommit?: typeof realUndoLastCommit;
 	savePhaseState?: typeof realSavePhaseState;
+	resetGit?: typeof realResetGit;
+	snapshot?: typeof realSnapshot;
+	stageFiles?: typeof realStageFiles;
 }
 
 /**
- * Advance to the next phase in the RED→GREEN→REFACTOR cycle.
+ * Advance to the next phase in the RED→GREEN cycle.
  * Runs allowlist check and transition gate before advancing.
  * Returns a result object — caller (adapter) handles logging and formatting.
  */
@@ -90,7 +99,7 @@ export async function advancePhase(
 
 /**
  * Revert to the previous phase using the private git snapshot log.
- * Reads the phase label from HEAD commit and restores that state.
+ * Untrustworthy history is nuked and replaced with a clean RED baseline.
  * Returns a result object — caller (adapter) handles logging and formatting.
  */
 export async function revertPhase(
@@ -103,24 +112,35 @@ export async function revertPhase(
 	const rh = deps?.resetHard ?? realResetHard;
 	const ulc = deps?.undoLastCommit ?? realUndoLastCommit;
 	const sps = deps?.savePhaseState ?? realSavePhaseState;
+	const rg = deps?.resetGit ?? realResetGit;
+	const snap = deps?.snapshot ?? realSnapshot;
+	const stf = deps?.stageFiles ?? realStageFiles;
+
+	const repair = (): AdvanceResult => ({
+		ok: true,
+		message: "Private git history was corrupt — reset to a clean RED baseline.",
+		newState: repairHistory(root, state.enabled, {
+			resetGit: rg,
+			snapshot: snap,
+			savePhaseState: sps,
+			stageFiles: stf,
+		}),
+	});
+
+	let headMsg: string;
+	try {
+		headMsg = hm(root);
+	} catch {
+		// Broken git — there is no history to roll back to, so start clean.
+		return repair();
+	}
 
 	if (!hp(root)) {
 		return { ok: false, message: "No previous phase to revert to." };
 	}
 
-	const headMsg = hm(root);
-	const phaseMatch = headMsg.match(/^tdd: (red|green|refactor)/);
-	if (!phaseMatch) {
-		return {
-			ok: false,
-			message:
-				`HEAD commit "${headMsg}" is not a TDD snapshot. Cannot determine previous phase.\n` +
-				"The private git repo at .pi/tdd must not be manually modified. " +
-				"Tampering with it will cause TDD state corruption.",
-		};
-	}
-
-	const prevPhase = phaseMatch[1] as Phase;
+	const label = parseTddLabel(headMsg);
+	if (!label) return repair();
 
 	// Nuke uncommitted changes
 	rh(root);
@@ -129,12 +149,12 @@ export async function revertPhase(
 	ulc(root);
 
 	// Update phase
-	const newState: PhaseState = { ...state, current: prevPhase };
+	const newState: PhaseState = { ...state, current: label };
 	sps(root, newState);
 
 	return {
 		ok: true,
-		message: `Reverted to ${prevPhase.toUpperCase()}.`,
+		message: `Reverted to ${label.toUpperCase()}.`,
 		newState,
 	};
 }

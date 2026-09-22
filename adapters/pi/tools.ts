@@ -20,10 +20,12 @@ import {
 	headMessage,
 	loadTddState,
 	nextPhase,
+	resetGit,
 	resetHard,
 	revertPhase,
 	savePhaseState,
 	snapshot,
+	stageFiles,
 	tddLog,
 	undoLastCommit,
 } from "../../engine/index.js";
@@ -52,6 +54,9 @@ export interface PreviousPhaseDeps {
 	resetHard: typeof resetHard;
 	undoLastCommit: typeof undoLastCommit;
 	savePhaseState: typeof savePhaseState;
+	resetGit: typeof resetGit;
+	snapshot: typeof snapshot;
+	stageFiles: typeof stageFiles;
 	tddLog: typeof tddLog;
 }
 
@@ -81,6 +86,9 @@ const defaultPreviousPhaseDeps: PreviousPhaseDeps = {
 	resetHard,
 	undoLastCommit,
 	savePhaseState,
+	resetGit,
+	snapshot,
+	stageFiles,
 	tddLog,
 };
 
@@ -113,6 +121,14 @@ export async function executeNextPhase(
 	}
 
 	const { state, config } = tdd;
+	const repairNote = tdd.repaired
+		? `NOTE: private git history was corrupt and has been reset (${tdd.repaired})\n`
+		: "";
+	if (tdd.repaired) {
+		deps.tddLog(tddDir, "WARN", "next_tdd_phase: git history repaired", {
+			reason: tdd.repaired,
+		});
+	}
 	const from = state.current;
 	const to = deps.nextPhase(from) as Phase;
 
@@ -199,7 +215,12 @@ export async function executeNextPhase(
 	});
 
 	return {
-		content: [{ type: "text", text: `\n${deps.getNudgePrompt(to, config)}` }],
+		content: [
+			{
+				type: "text",
+				text: `${repairNote}\n${deps.getNudgePrompt(to, config)}`,
+			},
+		],
 		details: {},
 	};
 }
@@ -228,6 +249,14 @@ export async function executePreviousPhase(
 	}
 
 	const { state } = tdd;
+	const repairNote = tdd.repaired
+		? ` NOTE: private git history was corrupt and has been reset (${tdd.repaired}).`
+		: "";
+	if (tdd.repaired) {
+		deps.tddLog(tddDir, "WARN", "previous_tdd_phase: git history repaired", {
+			reason: tdd.repaired,
+		});
+	}
 
 	const result = await revertPhase(root, state, {
 		hasParent: deps.hasParent,
@@ -235,6 +264,9 @@ export async function executePreviousPhase(
 		resetHard: deps.resetHard,
 		undoLastCommit: deps.undoLastCommit,
 		savePhaseState: deps.savePhaseState,
+		resetGit: deps.resetGit,
+		snapshot: deps.snapshot,
+		stageFiles: deps.stageFiles,
 	});
 
 	if (!result.ok) {
@@ -250,7 +282,7 @@ export async function executePreviousPhase(
 		content: [
 			{
 				type: "text",
-				text: `\n${result.message} Working tree has the previous snapshot content as unstaged changes.`,
+				text: `\n${result.message} Working tree has the previous snapshot content as unstaged changes.${repairNote}`,
 			},
 		],
 		details: {},

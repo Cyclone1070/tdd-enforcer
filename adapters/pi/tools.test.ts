@@ -60,13 +60,7 @@ describe("executeNextPhase", () => {
 		mockTddLog = vi.fn();
 
 		mockNextPhase.mockImplementation((p: string) =>
-			p === "red"
-				? "green"
-				: p === "green"
-					? "refactor"
-					: p === "refactor"
-						? "red"
-						: null,
+			p === "red" ? "green" : p === "green" ? "red" : null,
 		);
 		mockCheckGate.mockResolvedValue({ passed: true, message: "ok" });
 		mockAsyncExec.mockResolvedValue({ stdout: "", stderr: "" });
@@ -122,7 +116,7 @@ describe("executeNextPhase", () => {
 		).rejects.toThrow("Add a failing test");
 	});
 
-	it("blocks green→refactor when tests fail", async () => {
+	it("blocks green→red when tests fail", async () => {
 		mockLoadTddState.mockReturnValue({
 			ok: true,
 			state: { enabled: true, current: "green" },
@@ -130,7 +124,7 @@ describe("executeNextPhase", () => {
 		});
 		mockCheckGate.mockResolvedValue({
 			passed: false,
-			message: "Tests failed. Fix them before transitioning to REFACTOR.",
+			message: "Tests failed. Fix them before starting a new RED cycle.",
 		});
 		await expect(
 			executeNextPhase({ cwd: "/test" } as any, makeDeps()),
@@ -172,6 +166,23 @@ describe("executeNextPhase", () => {
 		});
 	});
 
+	it("mentions a repaired history in the next phase output", async () => {
+		mockLoadTddState.mockReturnValue({
+			ok: true,
+			state: { enabled: true, current: "red" },
+			config: CONFIG,
+			repaired: "HEAD is not a TDD snapshot",
+		});
+		mockCheckGate.mockResolvedValue({
+			passed: true,
+			message: "Tests fail — proceed to GREEN.",
+		});
+		mockGetNudgePrompt.mockReturnValue("You are now in **GREEN** phase.");
+		const result = await executeNextPhase({ cwd: "/test" } as any, makeDeps());
+		expect(result.content[0].text).toContain("private git history was corrupt");
+		expect(result.content[0].text).toContain("GREEN");
+	});
+
 	it("blocks on timeout with timeout message from checkGate", async () => {
 		mockLoadTddState.mockReturnValue({
 			ok: true,
@@ -191,7 +202,7 @@ describe("executeNextPhase", () => {
 		expect(mockSavePhaseState).not.toHaveBeenCalled();
 	});
 
-	it("advances green→refactor when tests pass", async () => {
+	it("advances green→red when tests pass", async () => {
 		mockLoadTddState.mockReturnValue({
 			ok: true,
 			state: { enabled: true, current: "green" },
@@ -201,46 +212,10 @@ describe("executeNextPhase", () => {
 			passed: true,
 			message: "All tests pass — proceeding.",
 		});
-		mockGetNudgePrompt.mockReturnValue("You are now in **REFACTOR** phase.");
-		const result = await executeNextPhase({ cwd: "/test" } as any, makeDeps());
-		expect(result.content[0].text).toContain("REFACTOR");
-		expect(mockSnapshot).toHaveBeenCalledWith("/test", "green");
-		expect(mockSavePhaseState).toHaveBeenCalledWith("/test", {
-			enabled: true,
-			current: "refactor",
-		});
-	});
-
-	it("blocks refactor→red when tests fail", async () => {
-		mockLoadTddState.mockReturnValue({
-			ok: true,
-			state: { enabled: true, current: "refactor" },
-			config: CONFIG,
-		});
-		mockCheckGate.mockResolvedValue({
-			passed: false,
-			message: "Tests failed. Fix them before transitioning to RED.",
-		});
-		await expect(
-			executeNextPhase({ cwd: "/test" } as any, makeDeps()),
-		).rejects.toThrow("failed");
-		expect(mockSavePhaseState).not.toHaveBeenCalled();
-	});
-
-	it("advances refactor→red when tests pass", async () => {
-		mockLoadTddState.mockReturnValue({
-			ok: true,
-			state: { enabled: true, current: "refactor" },
-			config: CONFIG,
-		});
-		mockCheckGate.mockResolvedValue({
-			passed: true,
-			message: "All tests pass — proceeding.",
-		});
 		mockGetNudgePrompt.mockReturnValue("You are now in **RED** phase.");
 		const result = await executeNextPhase({ cwd: "/test" } as any, makeDeps());
 		expect(result.content[0].text).toContain("RED");
-		expect(mockSnapshot).toHaveBeenCalledWith("/test", "refactor");
+		expect(mockSnapshot).toHaveBeenCalledWith("/test", "green");
 		expect(mockSavePhaseState).toHaveBeenCalledWith("/test", {
 			enabled: true,
 			current: "red",
@@ -250,7 +225,7 @@ describe("executeNextPhase", () => {
 	it("passes ctx.signal through to asyncExec for user cancellation", async () => {
 		const ac = new AbortController();
 
-		// Use green→refactor so passing tests satisfy the gate check
+		// Use green→red so passing tests satisfy the gate check
 		mockLoadTddState.mockReturnValue({
 			ok: true,
 			state: { enabled: true, current: "green" },
@@ -336,6 +311,9 @@ describe("executePreviousPhase", () => {
 	let mockResetHard: ReturnType<typeof vi.fn>;
 	let mockUndoLastCommit: ReturnType<typeof vi.fn>;
 	let mockSavePhaseState: ReturnType<typeof vi.fn>;
+	let mockResetGit: ReturnType<typeof vi.fn>;
+	let mockSnapshot: ReturnType<typeof vi.fn>;
+	let mockStageFiles: ReturnType<typeof vi.fn>;
 	let mockTddLog: ReturnType<typeof vi.fn>;
 
 	function makeDeps(
@@ -348,6 +326,9 @@ describe("executePreviousPhase", () => {
 			resetHard: mockResetHard,
 			undoLastCommit: mockUndoLastCommit,
 			savePhaseState: mockSavePhaseState,
+			resetGit: mockResetGit,
+			snapshot: mockSnapshot,
+			stageFiles: mockStageFiles,
 			tddLog: mockTddLog,
 			...overrides,
 		};
@@ -361,6 +342,9 @@ describe("executePreviousPhase", () => {
 		mockResetHard = vi.fn();
 		mockUndoLastCommit = vi.fn();
 		mockSavePhaseState = vi.fn();
+		mockResetGit = vi.fn();
+		mockSnapshot = vi.fn();
+		mockStageFiles = vi.fn();
 		mockTddLog = vi.fn();
 
 		mockHasParent.mockReturnValue(true);
@@ -399,16 +383,24 @@ describe("executePreviousPhase", () => {
 		).rejects.toThrow("No previous phase");
 	});
 
-	it("throws when HEAD message is not a TDD snapshot", async () => {
+	it("repairs the private repo when HEAD is not a TDD snapshot", async () => {
 		mockLoadTddState.mockReturnValue({
 			ok: true,
 			state: { enabled: true, current: "red" },
 			config: CONFIG,
 		});
 		mockHeadMessage.mockReturnValue("garbage");
-		await expect(
-			executePreviousPhase({ cwd: "/test" } as any, makeDeps()),
-		).rejects.toThrow("not a TDD snapshot");
+		const result = await executePreviousPhase(
+			{ cwd: "/test" } as any,
+			makeDeps(),
+		);
+		expect(result.content[0].text).toContain("corrupt");
+		expect(mockResetGit).toHaveBeenCalledWith("/test");
+		expect(mockSnapshot).toHaveBeenCalledWith("/test", "red");
+		expect(mockSavePhaseState).toHaveBeenCalledWith("/test", {
+			enabled: true,
+			current: "red",
+		});
 	});
 
 	it("reverts to previous phase on success", async () => {
@@ -431,10 +423,25 @@ describe("executePreviousPhase", () => {
 		});
 	});
 
+	it("mentions a repaired history in the previous phase output", async () => {
+		mockLoadTddState.mockReturnValue({
+			ok: true,
+			state: { enabled: true, current: "green" },
+			config: CONFIG,
+			repaired: "HEAD is not a TDD snapshot",
+		});
+		mockHeadMessage.mockReturnValue("tdd: red");
+		const result = await executePreviousPhase(
+			{ cwd: "/test" } as any,
+			makeDeps(),
+		);
+		expect(result.content[0].text).toContain("private git history was corrupt");
+	});
+
 	it("reverts to correct phase from green head label", async () => {
 		mockLoadTddState.mockReturnValue({
 			ok: true,
-			state: { enabled: true, current: "refactor" },
+			state: { enabled: true, current: "red" },
 			config: CONFIG,
 		});
 		mockHeadMessage.mockReturnValue("tdd: green");

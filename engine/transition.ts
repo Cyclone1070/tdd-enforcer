@@ -25,8 +25,7 @@ export type TestRunner = (
 /**
  * Run the transition gate check.
  * - RED→GREEN: tests must fail (all non-zero exit)
- * - GREEN→REFACTOR: tests must pass (all zero exit)
- * - REFACTOR→RED: tests must pass (all zero exit)
+ * - GREEN→RED: tests must pass (all zero exit)
  */
 export async function checkGate(
 	from: Phase,
@@ -65,20 +64,11 @@ export async function checkGate(
 			}
 			return { passed: true, message: "Tests fail — proceed to GREEN." };
 
-		case "green→refactor":
+		case "green→red":
 			if (!result.passed) {
 				return {
 					passed: false,
-					message: "Tests failed. Fix them before transitioning to REFACTOR.",
-				};
-			}
-			return { passed: true, message: "All tests pass — proceeding." };
-
-		case "refactor→red":
-			if (!result.passed) {
-				return {
-					passed: false,
-					message: "Tests failed. Fix them before transitioning to RED.",
+					message: "Tests failed. Fix them before starting a new RED cycle.",
 				};
 			}
 			return { passed: true, message: "All tests pass — proceeding." };
@@ -101,8 +91,6 @@ export function getDisallowedChanges(
 		disallowedFiles,
 	},
 ): string[] {
-	if (phase === "refactor") return [];
-
 	const changed = deps.changesSinceSnapshot(projectRoot);
 	return deps.disallowedFiles(changed, phase, config);
 }

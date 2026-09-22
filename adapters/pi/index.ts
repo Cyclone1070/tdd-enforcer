@@ -153,7 +153,7 @@ export async function handleTddStatus(
 }
 
 export async function handleTddJump(
-	phase: "red" | "green" | "refactor",
+	phase: "red" | "green",
 	ctx: ExtensionContext,
 	deps: {
 		loadTddState: typeof loadTddState;
@@ -295,7 +295,7 @@ export default function (pi: ExtensionAPI) {
 			handleTddReset(ctx, { ...defaultDeps, resetGit }),
 	});
 
-	for (const phase of ["red", "green", "refactor"] as const) {
+	for (const phase of ["red", "green"] as const) {
 		pi.registerCommand(`tdd:${phase}`, {
 			description:
 				`Skip to ${phase.toUpperCase()} phase. ` +

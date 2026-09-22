@@ -1,15 +1,22 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { loadConfig } from "./config.js";
-import { headMessage, initGit, stageFiles } from "./git.js";
+import {
+	hasParent,
+	headMessage,
+	initGit,
+	resetGit,
+	snapshot,
+	stageFiles,
+} from "./git.js";
 import { nextPhase } from "./transition.js";
-import type { Config, PhaseState } from "./types.js";
+import type { Config, Phase, PhaseState } from "./types.js";
+import { isPhase, parseTddLabel } from "./types.js";
 
 const TDD_DIR = ".pi/tdd";
-const VALID_PHASES = new Set(["red", "green", "refactor"]);
 
 export type TddLoadResult =
-	| { ok: true; state: PhaseState; config: Config }
+	| { ok: true; state: PhaseState; config: Config; repaired?: string }
 	| { ok: false; reason: string };
 
 export function phaseStatePath(projectRoot: string): string {
@@ -23,20 +30,32 @@ function ensureDir(path: string): void {
 	}
 }
 
-export function loadPhaseState(projectRoot: string): PhaseState {
-	const path = phaseStatePath(projectRoot);
-	const raw = readFileSync(path, "utf-8");
-	const parsed = JSON.parse(raw) as PhaseState;
+/** Fields read from state.json, normalised so callers never validate. */
+export interface ParsedPhaseState {
+	/** Parsed phase, or null when the file is missing, malformed, or invalid. */
+	current: Phase | null;
+	/** true only when the file contains a literal boolean true. */
+	enabled: boolean;
+}
 
-	if (typeof parsed.current !== "string" || !VALID_PHASES.has(parsed.current)) {
-		throw new Error(
-			`state.json: invalid phase "${String(parsed.current)}". Must be red, green, or refactor.`,
-		);
+/**
+ * Read state.json without throwing. Missing files, malformed JSON, and invalid
+ * fields all normalise — callers fall back to private-git recovery.
+ */
+export function loadPhaseState(projectRoot: string): ParsedPhaseState {
+	let raw: unknown;
+	try {
+		raw = JSON.parse(readFileSync(phaseStatePath(projectRoot), "utf-8"));
+	} catch {
+		return { current: null, enabled: false };
 	}
-
+	if (typeof raw !== "object" || raw === null) {
+		return { current: null, enabled: false };
+	}
+	const parsed = raw as { current?: unknown; enabled?: unknown };
 	return {
+		current: isPhase(parsed.current) ? parsed.current : null,
 		enabled: parsed.enabled === true,
-		current: parsed.current,
 	};
 }
 
@@ -46,42 +65,66 @@ export function savePhaseState(projectRoot: string, state: PhaseState): void {
 	writeFileSync(path, JSON.stringify(state, null, 2), "utf-8");
 }
 
+type GitProbe =
+	| { kind: "baseline" }
+	| { kind: "phase"; phase: Phase }
+	| { kind: "unusable"; reason: string };
+
 /**
- * Recover state.json from private git HEAD, or create default.
- * Returns the state (does not save to disk — caller does that).
+ * Inspect the private git repo.
+ * - baseline: repo is healthy but has only the initial commit
+ * - phase: HEAD is a TDD snapshot carrying a valid phase label
+ * - unusable: git threw, or HEAD is not a TDD snapshot
  */
-function recoverState(
+function probeGit(
 	root: string,
-	tddDir: string,
-	deps: {
-		existsSync: typeof existsSync;
-		headMessage: typeof headMessage;
-		nextPhase: typeof nextPhase;
-	} = { existsSync, headMessage, nextPhase },
-): PhaseState {
-	const gitDir = join(tddDir, ".git");
-	if (deps.existsSync(gitDir)) {
-		try {
-			const msg = deps.headMessage(root);
-			const m = msg.match(/^tdd: (red|green|refactor|init)$/);
-			if (m) {
-				const label = m[1];
-				if (label === "init") {
-					return { enabled: false, current: "red" };
-				}
-				const next = deps.nextPhase(label);
-				return { enabled: true, current: next ?? "red" };
-			}
-		} catch {
-			// No commits or bad HEAD — fall through to default
-		}
+	deps: { headMessage: typeof headMessage; hasParent: typeof hasParent },
+): GitProbe {
+	let message: string;
+	try {
+		message = deps.headMessage(root);
+	} catch (e) {
+		return { kind: "unusable", reason: (e as Error).message };
 	}
-	return { enabled: false, current: "red" };
+	if (!deps.hasParent(root)) return { kind: "baseline" };
+
+	const phase = parseTddLabel(message);
+	if (!phase) {
+		return {
+			kind: "unusable",
+			reason: `HEAD commit "${message}" is not a TDD snapshot.`,
+		};
+	}
+	return { kind: "phase", phase };
+}
+
+/** Nuke untrustworthy history and leave a clean RED baseline behind. */
+export function repairHistory(
+	root: string,
+	enabled: boolean,
+	deps: {
+		resetGit: typeof resetGit;
+		snapshot: typeof snapshot;
+		savePhaseState: typeof savePhaseState;
+		stageFiles: typeof stageFiles;
+	},
+): PhaseState {
+	deps.resetGit(root);
+	deps.snapshot(root, "red");
+	const state: PhaseState = { enabled, current: "red" };
+	deps.savePhaseState(root, state);
+	deps.stageFiles(root, [".pi/tdd/state.json"]);
+	return state;
 }
 
 /**
  * Load TDD state + config in one go.
- * Auto-creates state.json from private git HEAD when missing or corrupted.
+ *
+ * Resolution order:
+ * 1. An unusable private git repo is repaired by nuking it and snapshotting RED.
+ * 2. A valid state.json phase wins.
+ * 3. Otherwise the phase is recovered from the private git history.
+ *
  * Returns ok:true with state and config when rules.json is valid.
  * Returns ok:false with a specific reason string otherwise.
  *
@@ -96,7 +139,9 @@ export function loadTddState(
 		loadPhaseState: typeof loadPhaseState;
 		savePhaseState: typeof savePhaseState;
 		headMessage: typeof headMessage;
-		nextPhase: typeof nextPhase;
+		hasParent: typeof hasParent;
+		resetGit: typeof resetGit;
+		snapshot: typeof snapshot;
 		stageFiles: typeof stageFiles;
 	} = {
 		existsSync,
@@ -105,11 +150,13 @@ export function loadTddState(
 		loadPhaseState,
 		savePhaseState,
 		headMessage,
-		nextPhase,
+		hasParent,
+		resetGit,
+		snapshot,
 		stageFiles,
 	},
 ): TddLoadResult {
-	const tddDir = join(root, ".pi", "tdd");
+	const tddDir = join(root, TDD_DIR);
 	if (!deps.existsSync(tddDir)) {
 		return {
 			ok: false,
@@ -150,25 +197,33 @@ export function loadTddState(
 		}
 	}
 
-	// Auto-create state.json if missing or corrupted
-	const phasePath = join(tddDir, "state.json");
-	let state: PhaseState | undefined;
-	if (deps.existsSync(phasePath)) {
-		try {
-			state = deps.loadPhaseState(root);
-		} catch {
-			// Corrupted — recover below
-		}
-	}
-	if (!state) {
-		state = recoverState(root, tddDir, {
-			existsSync: deps.existsSync,
-			headMessage: deps.headMessage,
-			nextPhase: deps.nextPhase,
-		});
-		deps.savePhaseState(root, state);
-		deps.stageFiles(root, [".pi/tdd/state.json"]);
+	const fileState = deps.loadPhaseState(root);
+
+	// Broken or unrecognisable history is never trusted — nuke and start clean.
+	const probe = probeGit(root, {
+		headMessage: deps.headMessage,
+		hasParent: deps.hasParent,
+	});
+	if (probe.kind === "unusable") {
+		const state = repairHistory(root, fileState.enabled, deps);
+		return { ok: true, state, config, repaired: probe.reason };
 	}
 
+	// A valid state.json phase is authoritative.
+	if (fileState.current) {
+		return {
+			ok: true,
+			state: { enabled: fileState.enabled, current: fileState.current },
+			config,
+		};
+	}
+
+	// No usable state.json — rebuild it from the private git history.
+	const state: PhaseState =
+		probe.kind === "baseline"
+			? { enabled: false, current: "red" }
+			: { enabled: true, current: nextPhase(probe.phase) ?? "red" };
+	deps.savePhaseState(root, state);
+	deps.stageFiles(root, [".pi/tdd/state.json"]);
 	return { ok: true, state, config };
 }

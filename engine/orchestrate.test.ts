@@ -40,13 +40,7 @@ describe("advancePhase", () => {
 		mockNextPhase = vi
 			.fn()
 			.mockImplementation((p: string) =>
-				p === "red"
-					? "green"
-					: p === "green"
-						? "refactor"
-						: p === "refactor"
-							? "red"
-							: null,
+				p === "red" ? "green" : p === "green" ? "red" : null,
 			);
 		mockSnapshot = vi.fn().mockReturnValue("hash123");
 		mockSavePhaseState = vi.fn();
@@ -118,20 +112,10 @@ describe("advancePhase", () => {
 		);
 	});
 
-	it("passes correct phase transition green→refactor", () => {
+	it("passes correct phase transition green→red", () => {
 		advancePhase("/test", enabledState("green"), CONFIG, makeDeps());
 		expect(mockCheckGate).toHaveBeenCalledWith(
 			"green",
-			"refactor",
-			expect.anything(),
-			expect.anything(),
-		);
-	});
-
-	it("passes correct phase transition refactor→red", () => {
-		advancePhase("/test", enabledState("refactor"), CONFIG, makeDeps());
-		expect(mockCheckGate).toHaveBeenCalledWith(
-			"refactor",
 			"red",
 			expect.anything(),
 			expect.anything(),
@@ -193,7 +177,7 @@ describe("advancePhase", () => {
 	});
 
 	it("uses nextPhase from deps if provided", () => {
-		const customNext = vi.fn().mockReturnValue("refactor");
+		const customNext = vi.fn().mockReturnValue("red");
 		advancePhase(
 			"/test",
 			enabledState("red"),
@@ -226,6 +210,9 @@ describe("revertPhase", () => {
 	let mockResetHard: ReturnType<typeof vi.fn>;
 	let mockUndoLastCommit: ReturnType<typeof vi.fn>;
 	let mockSavePhaseState: ReturnType<typeof vi.fn>;
+	let mockResetGit: ReturnType<typeof vi.fn>;
+	let mockSnapshot: ReturnType<typeof vi.fn>;
+	let mockStageFiles: ReturnType<typeof vi.fn>;
 
 	function makeDeps(overrides = {}) {
 		return {
@@ -234,6 +221,9 @@ describe("revertPhase", () => {
 			resetHard: mockResetHard,
 			undoLastCommit: mockUndoLastCommit,
 			savePhaseState: mockSavePhaseState,
+			resetGit: mockResetGit,
+			snapshot: mockSnapshot,
+			stageFiles: mockStageFiles,
 			...overrides,
 		};
 	}
@@ -245,6 +235,9 @@ describe("revertPhase", () => {
 		mockResetHard = vi.fn();
 		mockUndoLastCommit = vi.fn();
 		mockSavePhaseState = vi.fn();
+		mockResetGit = vi.fn();
+		mockSnapshot = vi.fn();
+		mockStageFiles = vi.fn();
 	});
 
 	it("returns error when no parent commit", async () => {
@@ -258,19 +251,41 @@ describe("revertPhase", () => {
 		expect(result.message).toBe("No previous phase to revert to.");
 	});
 
-	it("returns error with tampering warning when HEAD is not a TDD snapshot", async () => {
+	it("repairs when git throws", async () => {
+		mockHeadMessage.mockImplementation(() => {
+			throw new Error("fatal: not a git repository");
+		});
+		const result = await revertPhase(
+			"/test",
+			enabledState("green"),
+			makeDeps(),
+		);
+		expect(result.ok).toBe(true);
+		expect(result.message).toMatch(/corrupt/i);
+		expect(result.newState).toEqual({ enabled: true, current: "red" });
+		expect(mockResetGit).toHaveBeenCalledWith("/test");
+		expect(mockSnapshot).toHaveBeenCalledWith("/test", "red");
+		expect(mockResetHard).not.toHaveBeenCalled();
+		expect(mockUndoLastCommit).not.toHaveBeenCalled();
+	});
+
+	it("repairs when HEAD is not a TDD snapshot", async () => {
 		mockHeadMessage.mockReturnValue("some random commit");
 		const result = await revertPhase(
 			"/test",
 			enabledState("green"),
 			makeDeps(),
 		);
-		expect(result.ok).toBe(false);
-		expect(result.message).toBe(
-			'HEAD commit "some random commit" is not a TDD snapshot. Cannot determine previous phase.\n' +
-				"The private git repo at .pi/tdd must not be manually modified. " +
-				"Tampering with it will cause TDD state corruption.",
-		);
+		expect(result.ok).toBe(true);
+		expect(mockResetGit).toHaveBeenCalledWith("/test");
+		expect(mockSnapshot).toHaveBeenCalledWith("/test", "red");
+	});
+
+	it("repairs when HEAD is the legacy refactor label", async () => {
+		mockHeadMessage.mockReturnValue("tdd: refactor");
+		const result = await revertPhase("/test", enabledState("red"), makeDeps());
+		expect(result.ok).toBe(true);
+		expect(mockResetGit).toHaveBeenCalled();
 	});
 
 	it("resets hard and pops last commit on success", async () => {
@@ -284,6 +299,7 @@ describe("revertPhase", () => {
 		expect(result.newState?.current).toBe("red");
 		expect(mockResetHard).toHaveBeenCalledWith("/test");
 		expect(mockUndoLastCommit).toHaveBeenCalledWith("/test");
+		expect(mockResetGit).not.toHaveBeenCalled();
 	});
 
 	it("saves the reverted phase state", async () => {
@@ -294,22 +310,11 @@ describe("revertPhase", () => {
 		});
 	});
 
-	it("determines previous phase from HEAD commit message", async () => {
+	it("determines the reverted phase from the HEAD commit message", async () => {
 		mockHeadMessage.mockReturnValue("tdd: green");
-		const result = await revertPhase(
-			"/test",
-			enabledState("refactor"),
-			makeDeps(),
-		);
-		expect(result.ok).toBe(true);
-		expect(result.newState?.current).toBe("green");
-	});
-
-	it("determines refactor phase from HEAD commit message", async () => {
-		mockHeadMessage.mockReturnValue("tdd: refactor");
 		const result = await revertPhase("/test", enabledState("red"), makeDeps());
 		expect(result.ok).toBe(true);
-		expect(result.newState?.current).toBe("refactor");
+		expect(result.newState?.current).toBe("green");
 	});
 
 	it("preserves enabled state in new state", async () => {
@@ -329,7 +334,7 @@ describe("revertPhase", () => {
 		const customUndoLastCommit = vi.fn();
 		const customSavePhaseState = vi.fn();
 
-		await revertPhase("/test", enabledState("refactor"), {
+		await revertPhase("/test", enabledState("red"), {
 			hasParent: customHasParent,
 			headMessage: customHeadMessage,
 			resetHard: customResetHard,
@@ -342,13 +347,6 @@ describe("revertPhase", () => {
 		expect(customResetHard).toHaveBeenCalled();
 		expect(customUndoLastCommit).toHaveBeenCalled();
 		expect(customSavePhaseState).toHaveBeenCalled();
-	});
-
-	it("falls back to real functions when deps not provided", async () => {
-		// Should use real hasParent, headMessage, etc. from engine
-		const result = await revertPhase("/test", enabledState("green"));
-		// Real hasParent will fail because /test isn't a git repo
-		expect(result.ok).toBe(false);
 	});
 });
 
@@ -402,19 +400,6 @@ describe("getStatusInfo", () => {
 			},
 		);
 		expect(info).toContain("GREEN");
-	});
-
-	it("shows REFACTOR phase", () => {
-		const info = getStatusInfo(
-			{ enabled: true, current: "refactor" },
-			{
-				blockedInRed: [],
-				blockedInGreen: [],
-				testCommands: [],
-				timeoutSeconds: 30,
-			},
-		);
-		expect(info).toContain("REFACTOR");
 	});
 
 	it("shows multiple blocked files for RED", () => {

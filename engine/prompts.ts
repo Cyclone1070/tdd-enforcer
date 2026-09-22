@@ -18,14 +18,9 @@ export function getNudgePrompt(phase: Phase, config: Config): string {
 			return (
 				`You are now in **GREEN** phase. Implement features.\n` +
 				`Blocked files: ${greenBlock}\n` +
-				"All other files are free to modify. Call `next_tdd_phase` to proceed to REFACTOR.\n" +
+				"All other files are free to modify. Call `next_tdd_phase` to start a new RED cycle.\n" +
 				"Write minimal code to make the failing tests pass — nothing more.\n" +
 				"If the RED phase tests were wrong, call `previous_tdd_phase` to go back and fix them."
-			);
-		case "refactor":
-			return (
-				"You are now in **REFACTOR** phase. Both test and implementation files are free to modify. " +
-				"Refactor without changing behavior. Call `next_tdd_phase` to start a new RED cycle."
 			);
 		default:
 			return "";

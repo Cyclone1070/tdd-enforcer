@@ -10,11 +10,6 @@ const testConfig: Config = {
 };
 
 describe("isAllowed", () => {
-	it("allows everything in refactor phase", () => {
-		expect(isAllowed("any/file.ts", "refactor", testConfig)).toBe(true);
-		expect(isAllowed("tests/foo.test.ts", "refactor", testConfig)).toBe(true);
-	});
-
 	describe("red phase", () => {
 		it("allows free files", () => {
 			expect(isAllowed("README.md", "red", testConfig)).toBe(true);
@@ -130,16 +125,6 @@ describe("isAllowed", () => {
 });
 
 describe("disallowedFiles", () => {
-	it("returns empty for refactor phase", () => {
-		expect(
-			disallowedFiles(
-				["src/main.ts", "tests/foo.test.ts"],
-				"refactor",
-				testConfig,
-			),
-		).toEqual([]);
-	});
-
 	it("returns empty when input list is empty", () => {
 		expect(disallowedFiles([], "red", testConfig)).toEqual([]);
 		expect(disallowedFiles([], "green", testConfig)).toEqual([]);

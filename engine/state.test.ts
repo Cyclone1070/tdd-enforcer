@@ -14,71 +14,84 @@ function withTempDir(fn: (dir: string) => void) {
 	}
 }
 
+function withStateFile(raw: string, fn: (dir: string) => void) {
+	withTempDir((dir) => {
+		const tddDir = join(dir, ".pi", "tdd");
+		mkdirSync(tddDir, { recursive: true });
+		writeFileSync(join(tddDir, "state.json"), raw, "utf-8");
+		fn(dir);
+	});
+}
+
+// ── loadPhaseState ─────────────────────────────────────────────────────────
+
 describe("loadPhaseState", () => {
-	it("throws when no file exists", () => {
+	it("returns empty state when no file exists", () => {
 		withTempDir((dir) => {
-			expect(() => loadPhaseState(dir)).toThrow();
+			expect(loadPhaseState(dir)).toEqual({ current: null, enabled: false });
 		});
 	});
 
 	it("returns parsed state from state.json", () => {
-		withTempDir((dir) => {
-			const tddDir = join(dir, ".pi", "tdd");
-			mkdirSync(tddDir, { recursive: true });
-			writeFileSync(
-				join(tddDir, "state.json"),
-				JSON.stringify({ enabled: true, current: "green" }),
-				"utf-8",
-			);
-			const state = loadPhaseState(dir);
-			expect(state.enabled).toBe(true);
-			expect(state.current).toBe("green");
+		withStateFile(
+			JSON.stringify({ enabled: true, current: "green" }),
+			(dir) => {
+				expect(loadPhaseState(dir)).toEqual({
+					current: "green",
+					enabled: true,
+				});
+			},
+		);
+	});
+
+	it("returns null phase for an invalid phase name", () => {
+		withStateFile(
+			JSON.stringify({ enabled: true, current: "blurple" }),
+			(dir) => {
+				expect(loadPhaseState(dir)).toEqual({ current: null, enabled: true });
+			},
+		);
+	});
+
+	it("returns null phase for the old 'refactor' value", () => {
+		withStateFile(
+			JSON.stringify({ enabled: true, current: "refactor" }),
+			(dir) => {
+				expect(loadPhaseState(dir)).toEqual({ current: null, enabled: true });
+			},
+		);
+	});
+
+	it("returns null phase for the old 'off' value", () => {
+		withStateFile(JSON.stringify({ enabled: false, current: "off" }), (dir) => {
+			expect(loadPhaseState(dir)).toEqual({ current: null, enabled: false });
 		});
 	});
 
-	it("throws when current is an invalid phase", () => {
-		withTempDir((dir) => {
-			const tddDir = join(dir, ".pi", "tdd");
-			mkdirSync(tddDir, { recursive: true });
-			writeFileSync(
-				join(tddDir, "state.json"),
-				JSON.stringify({ enabled: true, current: "blurple" }),
-				"utf-8",
-			);
-			expect(() => loadPhaseState(dir)).toThrow();
+	it("normalises non-boolean enabled to false", () => {
+		withStateFile(JSON.stringify({ enabled: "yes", current: "red" }), (dir) => {
+			expect(loadPhaseState(dir)).toEqual({ current: "red", enabled: false });
 		});
 	});
 
-	it("throws when current is the old 'off' value", () => {
-		withTempDir((dir) => {
-			const tddDir = join(dir, ".pi", "tdd");
-			mkdirSync(tddDir, { recursive: true });
-			writeFileSync(
-				join(tddDir, "state.json"),
-				JSON.stringify({ enabled: false, current: "off" }),
-				"utf-8",
-			);
-			expect(() => loadPhaseState(dir)).toThrow();
+	it("returns empty state for malformed JSON", () => {
+		withStateFile("not json{{{", (dir) => {
+			expect(loadPhaseState(dir)).toEqual({ current: null, enabled: false });
 		});
 	});
 
-	it("throws on malformed JSON", () => {
-		withTempDir((dir) => {
-			const tddDir = join(dir, ".pi", "tdd");
-			mkdirSync(tddDir, { recursive: true });
-			writeFileSync(join(tddDir, "state.json"), "not json{{{", "utf-8");
-			expect(() => loadPhaseState(dir)).toThrow();
+	it("returns empty state for non-object JSON", () => {
+		withStateFile("null", (dir) => {
+			expect(loadPhaseState(dir)).toEqual({ current: null, enabled: false });
 		});
 	});
 });
 
 describe("savePhaseState", () => {
-	it("writes state.json and can be read back", () => {
+	it("writes state.json that can be read back", () => {
 		withTempDir((dir) => {
-			savePhaseState(dir, { enabled: true, current: "refactor" });
-			const state = loadPhaseState(dir);
-			expect(state.enabled).toBe(true);
-			expect(state.current).toBe("refactor");
+			savePhaseState(dir, { enabled: true, current: "green" });
+			expect(loadPhaseState(dir)).toEqual({ current: "green", enabled: true });
 		});
 	});
 });
@@ -92,11 +105,6 @@ const validRules = {
 	timeoutSeconds: 30,
 };
 
-const validPhase = {
-	enabled: true,
-	current: "red",
-};
-
 describe("loadTddState", () => {
 	let mockExistsSync: ReturnType<typeof vi.fn>;
 	let mockLoadConfig: ReturnType<typeof vi.fn>;
@@ -104,17 +112,10 @@ describe("loadTddState", () => {
 	let mockLoadPhaseState: ReturnType<typeof vi.fn>;
 	let mockSavePhaseState: ReturnType<typeof vi.fn>;
 	let mockHeadMessage: ReturnType<typeof vi.fn>;
-	let mockNextPhase: ReturnType<typeof vi.fn>;
+	let mockHasParent: ReturnType<typeof vi.fn>;
+	let mockResetGit: ReturnType<typeof vi.fn>;
+	let mockSnapshot: ReturnType<typeof vi.fn>;
 	let mockStageFiles: ReturnType<typeof vi.fn>;
-
-	const realNextPhase = (p: string) =>
-		p === "red"
-			? "green"
-			: p === "green"
-				? "refactor"
-				: p === "refactor"
-					? "red"
-					: null;
 
 	function makeDeps(overrides = {}) {
 		return {
@@ -124,7 +125,9 @@ describe("loadTddState", () => {
 			loadPhaseState: mockLoadPhaseState,
 			savePhaseState: mockSavePhaseState,
 			headMessage: mockHeadMessage,
-			nextPhase: mockNextPhase,
+			hasParent: mockHasParent,
+			resetGit: mockResetGit,
+			snapshot: mockSnapshot,
 			stageFiles: mockStageFiles,
 			...overrides,
 		};
@@ -132,17 +135,18 @@ describe("loadTddState", () => {
 
 	beforeEach(() => {
 		vi.clearAllMocks();
-		mockExistsSync = vi.fn().mockImplementation((path: string) => {
-			if (path.includes(".git")) return false;
-			if (path.includes(".pi/tdd")) return true;
-			return true;
-		});
+		mockExistsSync = vi.fn().mockReturnValue(true);
 		mockLoadConfig = vi.fn().mockReturnValue(validRules);
 		mockInitGit = vi.fn();
-		mockLoadPhaseState = vi.fn().mockReturnValue(validPhase);
+		mockLoadPhaseState = vi.fn().mockReturnValue({
+			current: "red",
+			enabled: true,
+		});
 		mockSavePhaseState = vi.fn();
 		mockHeadMessage = vi.fn().mockReturnValue("tdd: red");
-		mockNextPhase = vi.fn().mockImplementation(realNextPhase);
+		mockHasParent = vi.fn().mockReturnValue(true);
+		mockResetGit = vi.fn();
+		mockSnapshot = vi.fn();
 		mockStageFiles = vi.fn();
 	});
 
@@ -150,56 +154,16 @@ describe("loadTddState", () => {
 		mockExistsSync.mockReturnValue(false);
 		const result = loadTddState("/test", makeDeps());
 		expect(result.ok).toBe(false);
-		expect(result.reason).toContain("Missing .pi/tdd/");
+		if (!result.ok) expect(result.reason).toContain("Missing .pi/tdd/");
 	});
 
 	it("returns missing rules.json error when only dir exists", () => {
-		mockExistsSync.mockImplementation((path: string) => {
-			if (path.includes("rules.json")) return false;
-			if (path.includes(".pi/tdd")) return true;
-			return false;
-		});
+		mockExistsSync.mockImplementation(
+			(path: string) => !path.includes("rules.json"),
+		);
 		const result = loadTddState("/test", makeDeps());
 		expect(result.ok).toBe(false);
-		expect(result.reason).toContain("rules.json");
-	});
-
-	it("auto-creates state.json when missing (default RED disabled)", () => {
-		mockExistsSync.mockImplementation((path: string) => {
-			if (path.includes("state.json")) return false;
-			if (path.includes(".git")) return false;
-			return true;
-		});
-		mockHeadMessage.mockReturnValue("tdd: init");
-		const result = loadTddState("/test", makeDeps());
-		expect(result.ok).toBe(true);
-		if (result.ok) {
-			expect(result.state.enabled).toBe(false);
-			expect(result.state.current).toBe("red");
-		}
-		expect(mockInitGit).toHaveBeenCalled();
-		expect(mockSavePhaseState).toHaveBeenCalledWith("/test", {
-			enabled: false,
-			current: "red",
-		});
-	});
-
-	it("auto-creates state.json when corrupted (recovers to default)", () => {
-		mockExistsSync.mockImplementation((path: string) => {
-			if (path.includes("state.json")) return true;
-			if (path.includes(".git")) return false;
-			return true;
-		});
-		mockLoadPhaseState.mockImplementation(() => {
-			throw new Error("corrupt");
-		});
-		mockHeadMessage.mockReturnValue("tdd: init");
-		const result = loadTddState("/test", makeDeps());
-		expect(result.ok).toBe(true);
-		if (result.ok) {
-			expect(result.state.enabled).toBe(false);
-			expect(result.state.current).toBe("red");
-		}
+		if (!result.ok) expect(result.reason).toContain("rules.json");
 	});
 
 	it("returns invalid rules.json error for malformed JSON", () => {
@@ -208,38 +172,15 @@ describe("loadTddState", () => {
 		});
 		const result = loadTddState("/test", makeDeps());
 		expect(result.ok).toBe(false);
-		expect(result.reason).toContain("Invalid .pi/tdd/rules.json");
+		if (!result.ok)
+			expect(result.reason).toContain("Invalid .pi/tdd/rules.json");
 	});
 
-	it("returns ok when state.json has enabled: false (callers check enabled)", () => {
-		mockLoadPhaseState.mockReturnValue({ enabled: false, current: "red" });
-		const result = loadTddState("/test", makeDeps());
-		expect(result.ok).toBe(true);
-		if (result.ok) {
-			expect(result.state.enabled).toBe(false);
-			expect(result.state.current).toBe("red");
-		}
-	});
-
-	it("returns ok with state and config when everything valid", () => {
-		mockLoadPhaseState.mockReturnValue(validPhase);
-		const result = loadTddState("/test", makeDeps());
-		expect(result.ok).toBe(true);
-		if (result.ok) {
-			expect(result.state.current).toBe("red");
-			expect(result.state.enabled).toBe(true);
-			expect(result.config.testCommands).toEqual(["npm test"]);
-			expect(result.config.blockedInRed).toEqual(["tests/**/*.test.ts"]);
-		}
-	});
-
-	it("auto-creates git repo when missing", () => {
+	it("initialises git when the private repo is missing", () => {
 		let gitExists = false;
-		mockExistsSync.mockImplementation((path: string) => {
-			if (path.includes(".git")) return gitExists;
-			if (path.includes(".pi/tdd")) return true;
-			return true;
-		});
+		mockExistsSync.mockImplementation(
+			(path: string) => !path.includes(".git") || gitExists,
+		);
 		mockInitGit.mockImplementation(() => {
 			gitExists = true;
 		});
@@ -248,109 +189,142 @@ describe("loadTddState", () => {
 		expect(mockInitGit).toHaveBeenCalled();
 	});
 
-	it("handles multiple calls without error", () => {
-		const r1 = loadTddState("/test", makeDeps());
-		expect(r1.ok).toBe(true);
-		const r2 = loadTddState("/test", makeDeps());
-		expect(r2.ok).toBe(true);
-		expect(mockLoadConfig).toHaveBeenCalledTimes(2);
-	});
-
-	it("recovers from invalid current phase in state.json (auto-creates default)", () => {
-		mockLoadPhaseState.mockImplementation(() => {
-			throw new Error("invalid phase");
-		});
-		mockHeadMessage.mockReturnValue("tdd: init");
+	it("returns ok with state and config when everything is valid", () => {
 		const result = loadTddState("/test", makeDeps());
 		expect(result.ok).toBe(true);
 		if (result.ok) {
-			expect(result.state.enabled).toBe(false);
+			expect(result.state).toEqual({ enabled: true, current: "red" });
+			expect(result.config.testCommands).toEqual(["npm test"]);
+			expect(result.repaired).toBeUndefined();
+		}
+	});
+
+	it("does not save or stage when state.json is valid", () => {
+		loadTddState("/test", makeDeps());
+		expect(mockSavePhaseState).not.toHaveBeenCalled();
+		expect(mockStageFiles).not.toHaveBeenCalled();
+	});
+
+	it("repairs when git throws", () => {
+		mockLoadPhaseState.mockReturnValue({ current: null, enabled: false });
+		mockHeadMessage.mockImplementation(() => {
+			throw new Error("fatal: not a git repository");
+		});
+		const result = loadTddState("/test", makeDeps());
+		expect(result.ok).toBe(true);
+		if (result.ok) {
+			expect(result.state).toEqual({ enabled: false, current: "red" });
+			expect(result.repaired).toMatch(/not a git repository/);
+		}
+		expect(mockResetGit).toHaveBeenCalledWith("/test");
+		expect(mockSnapshot).toHaveBeenCalledWith("/test", "red");
+		expect(mockSavePhaseState).toHaveBeenCalledWith("/test", {
+			enabled: false,
+			current: "red",
+		});
+		expect(mockStageFiles).toHaveBeenCalledWith("/test", [
+			".pi/tdd/state.json",
+		]);
+	});
+
+	it("repairs when HEAD is not a TDD snapshot", () => {
+		mockLoadPhaseState.mockReturnValue({ current: null, enabled: false });
+		mockHeadMessage.mockReturnValue("some random commit");
+		const result = loadTddState("/test", makeDeps());
+		expect(result.ok).toBe(true);
+		if (result.ok) {
+			expect(result.repaired).toContain("some random commit");
 			expect(result.state.current).toBe("red");
 		}
+		expect(mockResetGit).toHaveBeenCalled();
 	});
 
-	it("recoverState: HEAD tdd:red → enabled green", () => {
-		mockExistsSync.mockImplementation((path: string) => {
-			if (path.includes("state.json")) return false;
-			return true;
-		});
-		mockHeadMessage.mockReturnValue("tdd: red");
-		mockNextPhase.mockImplementation(realNextPhase);
-		const result = loadTddState("/test", makeDeps());
-		expect(result.ok).toBe(true);
-		if (result.ok) {
-			expect(result.state.enabled).toBe(true);
-			expect(result.state.current).toBe("green");
-		}
-	});
-
-	it("recoverState: HEAD tdd:green → enabled refactor", () => {
-		mockExistsSync.mockImplementation((path: string) => {
-			if (path.includes("state.json")) return false;
-			return true;
-		});
-		mockHeadMessage.mockReturnValue("tdd: green");
-		const result = loadTddState("/test", makeDeps());
-		expect(result.ok).toBe(true);
-		if (result.ok) {
-			expect(result.state.enabled).toBe(true);
-			expect(result.state.current).toBe("refactor");
-		}
-	});
-
-	it("recoverState: HEAD tdd:refactor → enabled red", () => {
-		mockExistsSync.mockImplementation((path: string) => {
-			if (path.includes("state.json")) return false;
-			return true;
-		});
+	it("repairs when HEAD is the legacy refactor label", () => {
+		mockLoadPhaseState.mockReturnValue({ current: null, enabled: true });
 		mockHeadMessage.mockReturnValue("tdd: refactor");
 		const result = loadTddState("/test", makeDeps());
 		expect(result.ok).toBe(true);
 		if (result.ok) {
-			expect(result.state.enabled).toBe(true);
-			expect(result.state.current).toBe("red");
+			expect(result.state).toEqual({ enabled: true, current: "red" });
+			expect(result.repaired).toContain("tdd: refactor");
+		}
+		expect(mockResetGit).toHaveBeenCalled();
+	});
+
+	it("repairs even when state.json is valid", () => {
+		mockLoadPhaseState.mockReturnValue({ current: "green", enabled: true });
+		mockHeadMessage.mockReturnValue("garbage");
+		const result = loadTddState("/test", makeDeps());
+		expect(result.ok).toBe(true);
+		if (result.ok) {
+			expect(result.state).toEqual({ enabled: true, current: "red" });
+		}
+		expect(mockResetGit).toHaveBeenCalled();
+	});
+
+	it("recovers enabled green from HEAD tdd:red when state.json has no phase", () => {
+		mockLoadPhaseState.mockReturnValue({ current: null, enabled: false });
+		mockHeadMessage.mockReturnValue("tdd: red");
+		const result = loadTddState("/test", makeDeps());
+		expect(result.ok).toBe(true);
+		if (result.ok) {
+			expect(result.state).toEqual({ enabled: true, current: "green" });
+		}
+		expect(mockSavePhaseState).toHaveBeenCalledWith("/test", {
+			enabled: true,
+			current: "green",
+		});
+		expect(mockStageFiles).toHaveBeenCalledWith("/test", [
+			".pi/tdd/state.json",
+		]);
+	});
+
+	it("recovers enabled red from HEAD tdd:green when state.json has no phase", () => {
+		mockLoadPhaseState.mockReturnValue({ current: null, enabled: false });
+		mockHeadMessage.mockReturnValue("tdd: green");
+		const result = loadTddState("/test", makeDeps());
+		expect(result.ok).toBe(true);
+		if (result.ok) {
+			expect(result.state).toEqual({ enabled: true, current: "red" });
 		}
 	});
 
-	it("force-adds state.json after creating it from recovery", () => {
-		mockExistsSync.mockImplementation((path: string) => {
-			if (path.includes("state.json")) return false;
-			if (path.includes(".git")) return false;
-			return true;
-		});
+	it("treats a root commit as a fresh baseline", () => {
+		mockLoadPhaseState.mockReturnValue({ current: null, enabled: false });
 		mockHeadMessage.mockReturnValue("tdd: init");
+		mockHasParent.mockReturnValue(false);
 		const result = loadTddState("/test", makeDeps());
 		expect(result.ok).toBe(true);
-		expect(mockStageFiles).toHaveBeenCalledWith("/test", [
-			".pi/tdd/state.json",
-		]);
+		if (result.ok) {
+			expect(result.state).toEqual({ enabled: false, current: "red" });
+			expect(result.repaired).toBeUndefined();
+		}
+		expect(mockResetGit).not.toHaveBeenCalled();
+		expect(mockSavePhaseState).toHaveBeenCalledWith("/test", {
+			enabled: false,
+			current: "red",
+		});
 	});
 
-	it("does not force-add state.json when it already exists and is valid", () => {
-		mockExistsSync.mockImplementation((path: string) => {
-			if (path.includes("state.json")) return true;
-			if (path.includes(".git")) return true;
-			return true;
-		});
+	it("lets a valid state.json phase win over a healthy git label", () => {
+		mockLoadPhaseState.mockReturnValue({ current: "green", enabled: false });
+		mockHeadMessage.mockReturnValue("tdd: red");
 		const result = loadTddState("/test", makeDeps());
 		expect(result.ok).toBe(true);
-		expect(mockStageFiles).not.toHaveBeenCalled();
+		if (result.ok) {
+			expect(result.state).toEqual({ enabled: false, current: "green" });
+		}
+		expect(mockSavePhaseState).not.toHaveBeenCalled();
 	});
 
-	it("force-adds state.json after recovering from corrupted state", () => {
-		mockExistsSync.mockImplementation((path: string) => {
-			if (path.includes("state.json")) return true;
-			if (path.includes(".git")) return true;
-			return true;
-		});
-		mockLoadPhaseState.mockImplementation(() => {
-			throw new Error("corrupt");
-		});
-		mockHeadMessage.mockReturnValue("tdd: init");
+	it("ignores a mismatched but valid git label", () => {
+		mockLoadPhaseState.mockReturnValue({ current: "red", enabled: true });
+		mockHeadMessage.mockReturnValue("tdd: green");
 		const result = loadTddState("/test", makeDeps());
 		expect(result.ok).toBe(true);
-		expect(mockStageFiles).toHaveBeenCalledWith("/test", [
-			".pi/tdd/state.json",
-		]);
+		if (result.ok) {
+			expect(result.state).toEqual({ enabled: true, current: "red" });
+		}
+		expect(mockResetGit).not.toHaveBeenCalled();
 	});
 });

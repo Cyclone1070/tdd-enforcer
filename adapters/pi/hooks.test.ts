@@ -301,41 +301,23 @@ describe("handleToolCall", () => {
 		expect(result).toBeUndefined();
 	});
 
-	it("allows in REFACTOR phase regardless of file type", async () => {
-		mockLoadTddState.mockReturnValue(enabledTddState({ current: "refactor" }));
-		// isAllowed is never called because the handler reaches .pi/tdd/ check
-		// before isAllowed, and for non-.pi/tdd/ files in refactor it would
-		// call isAllowed — but we mock it anyway.
+	it("logs when the load repaired a corrupt private git history", async () => {
+		mockLoadTddState.mockReturnValue({
+			...enabledTddState({ current: "red" }),
+			repaired: 'HEAD commit "tdd: refactor" is not a TDD snapshot.',
+		});
 
-		const r1 = await handleToolCall(
-			{ toolCallId: "1", toolName: "write", input: { path: "/x/src/main.ts" } },
-			{ cwd: "/x" } as any,
-			makeCallDeps(),
-		);
-		const r2 = await handleToolCall(
-			{
-				toolCallId: "2",
-				toolName: "write",
-				input: { path: "/x/tests/foo.test.ts" },
-			},
+		await handleToolCall(
+			{ toolCallId: "1", toolName: "read" } as any,
 			{ cwd: "/x" } as any,
 			makeCallDeps(),
 		);
 
-		expect(r1).toBeUndefined();
-		expect(r2).toBeUndefined();
-
-		// In refactor, isAllowed is still called even though it returns true
-		// (the implementation doesn't short-circuit for refactor before isAllowed)
-		expect(mockIsAllowed).toHaveBeenCalledWith(
-			"src/main.ts",
-			"refactor",
-			VALID_CONFIG,
-		);
-		expect(mockIsAllowed).toHaveBeenCalledWith(
-			"tests/foo.test.ts",
-			"refactor",
-			VALID_CONFIG,
+		expect(mockTddLog).toHaveBeenCalledWith(
+			"/x/.pi/tdd",
+			"WARN",
+			"tool_call: private git history repaired",
+			{ reason: 'HEAD commit "tdd: refactor" is not a TDD snapshot.' },
 		);
 	});
 });
@@ -484,14 +466,15 @@ describe("handleToolResult", () => {
 		expect(mockTddLog).toHaveBeenCalled();
 	});
 
-	it("passes through in refactor phase with no .pi/tdd/ violations", async () => {
+	it("passes through in green phase when no violations", async () => {
 		mockIsBashToolResult.mockReturnValue(true);
-		preBashStashes.set("bash-refactor", stashEntry("refactor"));
+		preBashStashes.set("bash-green", stashEntry("green"));
 		mockChangesSince.mockReturnValue(["src/main.ts"]);
+		mockIsAllowed.mockReturnValue(true);
 
 		const result = await handleToolResult(
 			{
-				toolCallId: "bash-refactor",
+				toolCallId: "bash-green",
 				toolName: "bash",
 				content: [{ type: "text", text: "done" }],
 			},
@@ -500,6 +483,11 @@ describe("handleToolResult", () => {
 		);
 
 		expect(result).toBeUndefined();
+		expect(mockIsAllowed).toHaveBeenCalledWith(
+			"src/main.ts",
+			"green",
+			VALID_CONFIG,
+		);
 	});
 
 	it("retains allowed changes alongside reverted violations", async () => {

@@ -55,6 +55,11 @@ export async function handleToolCall(
 	}
 
 	const { state, config } = tdd;
+	if (tdd.repaired) {
+		deps.tddLog(tddDir, "WARN", "tool_call: private git history repaired", {
+			reason: tdd.repaired,
+		});
+	}
 	if (!state.enabled) {
 		deps.tddLog(tddDir, "DEBUG", "tool_call: TDD disabled, passes through", {
 			toolName: (event as any).toolName,
@@ -217,10 +222,9 @@ export async function handleToolResult(
 	}
 
 	// Check phase-locked violations using cached phase + config
-	const phaseViolations =
-		phase === "refactor"
-			? []
-			: changed.filter((f) => !deps.isAllowed(f, phase, config));
+	const phaseViolations = changed.filter(
+		(f) => !deps.isAllowed(f, phase, config),
+	);
 
 	const cmdViolations = [...new Set([...tddViolations, ...phaseViolations])];
 

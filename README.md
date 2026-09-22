@@ -15,9 +15,9 @@
 
 ## Features
 
-- **Phase-locked file access** — prevents the agent from modifying test files in GREEN and implementation files in RED. Everything is open in REFACTOR
+- **Phase-locked file access** — prevents the agent from modifying test files in GREEN and implementation files in RED
 - **Guards all file-modifying tools** — `write`, `edit`, and `bash` are all intercepted. All invalid modifications are blocked.
-- **Automatic transition gates** — advancing to the next phase requires tests to fail (RED→GREEN) or pass (GREEN→REFACTOR, REFACTOR→RED). Misconfigured or broken transitions are rejected
+- **Automatic transition gates** — advancing to the next phase requires tests to fail (RED→GREEN) or pass (GREEN→RED). Misconfigured or broken transitions are rejected
 - **Safe rollback** — if the previous phase's work was wrong, reverting discards all current changes and restores the exact working tree from before that phase
 - **Stays out of your way** — TDD enforcement is opt-in (`/tdd:on`). Disable anytime with `/tdd:off` to unlock all files
 - **Version-controlled config** — `.pi/tdd/rules.json` lives in your repo alongside the code, so the whole team shares the same rules
@@ -68,7 +68,7 @@ Once configured, run:
 | `/tdd:off` | Disable TDD enforcement, all files become free |
 | `/tdd:status` | Show phase, blocked globs, test commands |
 | `/tdd:reset` | **Destructive**: nukes all snapshot history, resets to RED (disabled) |
-| `/tdd:red`, `/tdd:green`, `/tdd:refactor` | Skip to a given phase (auto-enables, no gate checks) |
+| `/tdd:red`, `/tdd:green` | Skip to a given phase (auto-enables, no gate checks) |
 
 ### Agent tools
 
@@ -85,14 +85,14 @@ Once configured, run:
 Uses a **private git repository** at `.pi/tdd/.git/` (separate from your project's real git history) to detect locked-file changes, revert invalid modifications, and track state across phase transitions.
 
 ```
-                 tests fail                  tests pass
-     ┌──────┐    (gate check)    ┌────────┐  (gate check)   ┌──────────┐
-     │ RED  │ ──────────────────▶│ GREEN  │ ───────────────▶│ REFACTOR │
-     │(test)│                    │ (impl) │                 │(cleanup) │
-     └──────┘                    └────────┘                 └──────────┘
-        ▲                                                        │
-        └────────────────────────────────────────────────────────┘
-                                tests pass
+                tests fail                  tests pass
+     ┌──────┐   (gate check)    ┌────────┐  (gate check)
+     │ RED  │ ─────────────────▶│ GREEN  │ ───────────────┐
+     │(test)│                   │ (impl) │                │
+     └──────┘                   └────────┘                │
+        ▲                                                 │
+        └─────────────────────────────────────────────────┘
+                         new cycle
 ```
 
 Every phase transition runs two validations before advancing:
@@ -100,8 +100,7 @@ Every phase transition runs two validations before advancing:
 1. **Allowlist check** — scans working tree changes against the phase's blocked globs. If any locked file has been modified, the transition is rejected with the violating paths listed
 2. **Gate check** — runs `testCommands` in parallel. The required outcome depends on the transition:
    - RED→GREEN: all commands must fail (a passing test suite means there's no failing test to justify moving to GREEN)
-   - GREEN→REFACTOR: all commands must pass
-   - REFACTOR→RED: all commands must pass
+   - GREEN→RED: all commands must pass
 
 If both checks pass, the working tree is snapshotted and the phase advances.
 
@@ -118,16 +117,20 @@ This means the agent can attempt any change — enforcement happens transparentl
 
 Each phase transition creates a labeled commit in a private git repository at `.pi/tdd/.git/`. Calling `previous_tdd_phase`:
 
-1. Confirms HEAD is a TDD snapshot (commit message starts with `tdd: {phase}`)
+1. Confirms HEAD is a TDD snapshot (commit message carries a valid phase label)
 2. Hard-resets the working tree to discard uncommitted changes
 3. Soft-resets HEAD~1 to pop the snapshot
 4. Sets the phase back
+
+If HEAD is not a TDD snapshot, the private repo is nuked and rebuilt with a clean RED baseline instead.
 
 Since TDD owns its own git repo, rollback doesn't touch the project's real git history at all.
 
 ### State recovery
 
-If `state.json` is missing or corrupted, the extension recovers by reading the last TDD commit message from `.pi/tdd/.git/`. The label (`tdd: red`, `tdd: green`, etc.) determines the current phase. If no TDD commits exist, it defaults to disabled in RED.
+`state.json` is read leniently: missing files, malformed JSON, and unknown phase values never crash the extension. A valid `state.json` phase wins; otherwise the phase is recovered from the last TDD commit message in `.pi/tdd/.git/` (`tdd: red`, `tdd: green`). A root commit with no parent is treated as a fresh baseline in RED (disabled).
+
+If the private git repo itself is unusable — git commands throw, or HEAD is not a TDD snapshot — the history is treated as corrupt: `.pi/tdd/.git/` is nuked and re-initialised with a clean RED baseline. `previous_tdd_phase` follows the same rule, so a corrupt history resets instead of failing.
 
 ---
 

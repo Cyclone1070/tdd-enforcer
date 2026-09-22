@@ -5,9 +5,9 @@ description: Use when working within TDD enforcer extension — understand phase
 
 # TDD Enforcer Skill
 
-This extension enforces the **Red-Green-Refactor** cycle of TDD.
+This extension enforces the **Red-Green** cycle of TDD.
 
-It locks files per phase — only test files in RED, only implementation files in GREEN, everything allowed in REFACTOR. The entire `.pi/tdd/` directory is locked when TDD is active.
+It locks files per phase — only test files in RED, only implementation files in GREEN. The entire `.pi/tdd/` directory is locked when TDD is active.
 
 ---
 
@@ -67,11 +67,7 @@ Write the simplest code that makes the failing tests pass — nothing more. The 
 
 If the RED phase tests were wrong, call `previous_tdd_phase` to go back and fix them before implementing. All current changes are lost, but that's better since the current changes was building on false assumptions. Don't be afraid to discard — clean slate beats patched code.
 
-Call `next_tdd_phase` once all tests pass.
-
-### REFACTOR
-All files are free to modify. Refactor without changing behaviour.
-Call `next_tdd_phase` once tests pass to start a new RED cycle.
+Call `next_tdd_phase` once all tests pass to start a new RED cycle.
 
 ---
 
@@ -87,8 +83,7 @@ Call `next_tdd_phase` once tests pass to start a new RED cycle.
 ### `next_tdd_phase`
 Runs transition gate checks. Fails if:
 - RED→GREEN: tests don't fail (must have a failing test)
-- GREEN→REFACTOR: tests fail (must pass)
-- REFACTOR→RED: tests fail (must pass)
+- GREEN→RED: tests fail (must pass)
 
 Also validates no locked files were modified. On success, records the current state and advances the phase.
 
