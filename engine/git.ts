@@ -54,6 +54,9 @@ function gitExec(
 		.execSync(`git ${args}`, {
 			...options,
 			env,
+			// Every git call runs from the project root so path output and
+			// pathspecs stay root-relative regardless of process cwd.
+			cwd: projectRoot,
 			encoding: "utf-8",
 		} as ExecSyncOptions)
 		.toString();
@@ -204,7 +207,7 @@ export function restoreFilesTo(
 
 	for (const f of untrackedFilesList) {
 		try {
-			deps.unlinkSync(f);
+			deps.unlinkSync(join(projectRoot, f));
 		} catch {
 			// File may already be gone, ignore
 		}

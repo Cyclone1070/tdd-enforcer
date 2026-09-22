@@ -1,3 +1,4 @@
+import { join } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { GitDeps } from "./git.js";
 import {
@@ -104,6 +105,20 @@ describe("git operations", () => {
 			expect.stringContaining("git restore"),
 			expect.any(Object),
 		);
+	});
+
+	it("runs every git command from the project root", () => {
+		outputs["rev-parse HEAD"] = "abc123\n";
+		headHash("/test", deps);
+		for (const call of (deps.execSync as any).mock.calls) {
+			expect(call[1].cwd).toBe("/test");
+		}
+	});
+
+	it("restoreFilesTo deletes untracked files relative to projectRoot", () => {
+		outputs["ls-files"] = "src/main.ts\n";
+		restoreFilesTo("/test", ["src/new.ts"], undefined, deps);
+		expect(deps.unlinkSync).toHaveBeenCalledWith(join("/test", "src/new.ts"));
 	});
 
 	it("modifiedFiles returns empty when HEAD matches working tree", () => {
