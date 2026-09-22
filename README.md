@@ -24,6 +24,31 @@
 
 ---
 
+## Why Red-Green only?
+
+The **REFACTOR** phase has been left out on purpose.
+
+LLM agents do their best structural work during GREEN. Once the tests pass, refactor phase is often treated as a formality and is usually skipped. The gate can only verify that tests pass, so it cannot verify that refactoring actually happened. A phase nothing can enforce degenerates into ceremony, and the cycle becomes RED→GREEN→RED with extra steps. With poor context or small models REFACTOR phase is also used as a TDD bypass tool since it doesn't enforce any file lock.
+
+Removing it keeps the loop honest:
+
+- RED locks implementation files, GREEN locks test files. Both phases have hard, testable rules
+- Every transition has a real gate — tests must fail to enter GREEN, and pass to leave it
+- Cycles stay small, so `previous_tdd_phase` is cheap when assumptions turn out wrong
+
+### Refactor deliberately, not automatically
+
+Structure changes are best done as a separate, conscious pass over a green suite — once in a while, not after every cycle:
+
+1. Finish a cycle or a feature with the tests passing
+2. Run `/tdd:off` to unlock all files
+3. Ask for a focused refactor pass — tests stay green, behaviour unchanged — or do it yourself
+4. Run `/tdd:on` when you are ready to continue
+
+The test suite is the safety net; the decision to refactor is yours.
+
+---
+
 ## Setup
 
 ### 1. Install
