@@ -1,0 +1,7 @@
+# tdd-enforcer: Red-Green TDD enforcement for the DeepSeek Harness.
+#
+# The plugin row resolves this package through the profile's node_modules; the
+# package entry (`main`) is the prebuilt dist/dsh/index.js.
+- insert:
+    - id: tdd-enforcer
+      name: tdd-enforcer

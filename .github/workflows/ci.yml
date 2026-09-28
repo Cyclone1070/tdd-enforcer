@@ -25,4 +25,8 @@ jobs:
 
       - run: npm run lint
 
+      - run: npm run build
+
+      - run: npm run preflight
+
       - run: npm test

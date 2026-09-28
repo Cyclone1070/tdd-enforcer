@@ -7,8 +7,12 @@ import {
 	writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
-
-const TDD_DIR = ".pi/tdd";
+import {
+	GITIGNORE_FILE,
+	RULES_FILE,
+	resolveTddDir,
+	STATE_FILE,
+} from "./paths.js";
 
 export type GitDeps = {
 	execSync: (command: string, options?: ExecSyncOptions) => Buffer;
@@ -35,8 +39,22 @@ const defaultDeps: GitDeps = {
 	rmSync,
 };
 
-function gitEnv(projectRoot: string): NodeJS.ProcessEnv {
-	const gitDir = join(projectRoot, TDD_DIR, ".git");
+/** The resolved TDD directory: `.tdd/` normally, `.pi/tdd/` for legacy projects. */
+function tddRoot(projectRoot: string, deps: GitDeps): string {
+	return join(projectRoot, resolveTddDir(projectRoot, deps));
+}
+
+/** Bookkeeping files force-added to the private repo on every snapshot. */
+function bookkeepingFiles(dir: string): string[] {
+	return [
+		`${dir}/${STATE_FILE}`,
+		`${dir}/${RULES_FILE}`,
+		`${dir}/${GITIGNORE_FILE}`,
+	];
+}
+
+function gitEnv(projectRoot: string, deps: GitDeps): NodeJS.ProcessEnv {
+	const gitDir = join(tddRoot(projectRoot, deps), ".git");
 	return {
 		GIT_DIR: gitDir,
 		GIT_WORK_TREE: projectRoot,
@@ -49,7 +67,7 @@ function gitExec(
 	deps: GitDeps,
 	options?: ExecSyncOptions,
 ): string {
-	const env = { ...process.env, ...gitEnv(projectRoot) };
+	const env = { ...process.env, ...gitEnv(projectRoot, deps) };
 	return deps
 		.execSync(`git ${args}`, {
 			...options,
@@ -66,7 +84,8 @@ export function initGit(
 	projectRoot: string,
 	deps: GitDeps = defaultDeps,
 ): void {
-	const tddPath = join(projectRoot, TDD_DIR);
+	const dir = resolveTddDir(projectRoot, deps);
+	const tddPath = tddRoot(projectRoot, deps);
 	const gitDir = join(tddPath, ".git");
 	if (deps.existsSync(gitDir)) return;
 
@@ -103,11 +122,7 @@ export function initGit(
 	}
 
 	gitExec("add -A", projectRoot, deps, { stdio: "pipe" as const });
-	stageFiles(
-		projectRoot,
-		[".pi/tdd/state.json", ".pi/tdd/rules.json", ".pi/tdd/.gitignore"],
-		deps,
-	);
+	stageFiles(projectRoot, bookkeepingFiles(dir), deps);
 	gitExec('commit --allow-empty -m "tdd: init"', projectRoot, deps, {
 		stdio: "pipe" as const,
 	});
@@ -118,7 +133,7 @@ export function resetGit(
 	projectRoot: string,
 	deps: GitDeps = defaultDeps,
 ): void {
-	const tddPath = join(projectRoot, TDD_DIR);
+	const tddPath = tddRoot(projectRoot, deps);
 	const gitDir = join(tddPath, ".git");
 	if (deps.existsSync(gitDir)) {
 		deps.rmSync(gitDir, { recursive: true, force: true });
@@ -135,7 +150,7 @@ export function snapshot(
 	gitExec("add -A", projectRoot, deps, { stdio: "pipe" as const });
 	stageFiles(
 		projectRoot,
-		[".pi/tdd/state.json", ".pi/tdd/rules.json", ".pi/tdd/.gitignore"],
+		bookkeepingFiles(resolveTddDir(projectRoot, deps)),
 		deps,
 	);
 	gitExec(`commit --allow-empty -m "tdd: ${phase}"`, projectRoot, deps, {
@@ -184,28 +199,53 @@ export function restoreFilesTo(
 ): void {
 	if (files.length === 0) return;
 
-	// Separate tracked (git restore) from untracked (delete)
-	const tracked = gitExec("ls-files", projectRoot, deps)
-		.trim()
-		.split("\n")
-		.filter(Boolean);
-	const trackedSet = new Set(tracked);
+	// A path the baseline captured is restored from it — including paths that
+	// were untracked before the call. A path the baseline never saw was created
+	// by the call itself, so it is removed.
+	const captured =
+		source === undefined
+			? undefined
+			: new Set(
+					gitExec(`ls-tree -r --name-only ${source}`, projectRoot, deps)
+						.trim()
+						.split("\n")
+						.filter(Boolean),
+				);
+	const restorable = files.filter((f) => captured?.has(f) ?? false);
+	const removable = files.filter((f) => !restorable.includes(f));
 
-	const trackedFiles = files.filter((f) => trackedSet.has(f));
-	const untrackedFilesList = files.filter((f) => !trackedSet.has(f));
-
-	if (trackedFiles.length > 0) {
-		const escaped = trackedFiles.map((f) => `"${f}"`).join(" ");
-		const sourceFlag = source ? `--source=${source} ` : "";
-		gitExec(
-			`restore ${sourceFlag}--worktree -- ${escaped}`,
-			projectRoot,
-			deps,
-			{ stdio: "pipe" as const },
-		);
+	if (restorable.length > 0) {
+		const escaped = restorable.map((f) => `"${f}"`).join(" ");
+		// checkout (not restore) so a path that is absent from the current index
+		// is still materialised from the source tree.
+		gitExec(`checkout ${source} -- ${escaped}`, projectRoot, deps, {
+			stdio: "pipe" as const,
+		});
 	}
 
-	for (const f of untrackedFilesList) {
+	if (source !== undefined) {
+		for (const f of removable) {
+			try {
+				deps.unlinkSync(join(projectRoot, f));
+			} catch {
+				// File may already be gone, ignore
+			}
+		}
+		return;
+	}
+
+	// No baseline: restore tracked paths from the index and drop untracked ones.
+	const tracked = new Set(
+		gitExec("ls-files", projectRoot, deps).trim().split("\n").filter(Boolean),
+	);
+	const trackedFiles = removable.filter((f) => tracked.has(f));
+	if (trackedFiles.length > 0) {
+		const escaped = trackedFiles.map((f) => `"${f}"`).join(" ");
+		gitExec(`restore --worktree -- ${escaped}`, projectRoot, deps, {
+			stdio: "pipe" as const,
+		});
+	}
+	for (const f of removable.filter((f) => !tracked.has(f))) {
 		try {
 			deps.unlinkSync(join(projectRoot, f));
 		} catch {
@@ -230,20 +270,27 @@ export function stageFiles(
 }
 
 /**
- * Create a lightweight commit of the current working tree without touching the stash ref.
- * Returns the commit hash. Used as a pre-bash baseline for per-command diff.
+ * Write a baseline commit of the current working tree and return its hash. Used
+ * as the pre-call baseline for the per-call diff.
+ *
+ * This deliberately avoids `git stash create --include-untracked`: that command
+ * exits 1 with no output in some trees, and it does not capture untracked
+ * content — which made a revert delete files that existed before the call.
+ * Staging everything and writing an explicit commit captures tracked and
+ * untracked content alike, so `restoreFilesTo` can bring either kind back.
  */
 export function gitStashCreate(
 	projectRoot: string,
 	deps: GitDeps = defaultDeps,
 ): string {
-	const hash = gitExec(
-		"stash create --include-untracked",
+	gitExec("add -A", projectRoot, deps, { stdio: "pipe" as const });
+	const tree = gitExec("write-tree", projectRoot, deps).trim();
+	const parent = headHash(projectRoot, deps);
+	return gitExec(
+		`commit-tree ${tree} -p ${parent} -m "tdd: baseline"`,
 		projectRoot,
 		deps,
 	).trim();
-	if (!hash) return "HEAD";
-	return hash;
 }
 
 export function headHash(
@@ -258,7 +305,11 @@ export function headMessage(
 	projectRoot: string,
 	deps: GitDeps = defaultDeps,
 ): string {
-	return gitExec("log -1 --format=%s HEAD", projectRoot, deps).trim();
+	// Callers treat an unreadable HEAD as a probe and repair the history, so the
+	// expected failure must not print git's complaint at the user.
+	return gitExec("log -1 --format=%s HEAD", projectRoot, deps, {
+		stdio: "pipe" as const,
+	}).trim();
 }
 
 /** Check if HEAD has a parent commit (i.e. can go back one). */
@@ -267,7 +318,9 @@ export function hasParent(
 	deps: GitDeps = defaultDeps,
 ): boolean {
 	try {
-		gitExec("rev-parse HEAD~1", projectRoot, deps);
+		// A fresh project has no parent commit. That is an answer, not an error,
+		// so git's "unknown revision" complaint stays out of the terminal.
+		gitExec("rev-parse HEAD~1", projectRoot, deps, { stdio: "pipe" as const });
 		return true;
 	} catch {
 		return false;

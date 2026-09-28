@@ -81,8 +81,8 @@ function stashEntry(phase: Phase) {
 // ── handleToolCall ──────────────────────────────────────────────────────────
 
 describe("handleToolCall", () => {
-	it("passes through when .pi/tdd/ does not exist", async () => {
-		mockLoadTddState.mockReturnValue({ ok: false, reason: "Missing .pi/tdd/" });
+	it("passes through when .tdd/ does not exist", async () => {
+		mockLoadTddState.mockReturnValue({ ok: false, reason: "Missing .tdd/" });
 
 		const result = await handleToolCall(
 			{ toolCallId: "1", toolName: "edit", input: { path: "/x/foo.ts" } },
@@ -160,14 +160,14 @@ describe("handleToolCall", () => {
 		expect(preBashStashes.has("bash-2")).toBe(false);
 	});
 
-	it("blocks write to .pi/tdd/ file when TDD active", async () => {
+	it("blocks write to .tdd/ file when TDD active", async () => {
 		mockLoadTddState.mockReturnValue(enabledTddState({ current: "red" }));
 
 		const result = await handleToolCall(
 			{
 				toolCallId: "1",
 				toolName: "write",
-				input: { path: "/x/.pi/tdd/rules.json" },
+				input: { path: "/x/.tdd/rules.json" },
 			},
 			{ cwd: "/x" } as any,
 			makeCallDeps(),
@@ -178,14 +178,14 @@ describe("handleToolCall", () => {
 		expect((result as any).reason).toContain("Config files are locked");
 	});
 
-	it("blocks edit to .pi/tdd/ file when TDD active", async () => {
+	it("blocks edit to .tdd/ file when TDD active", async () => {
 		mockLoadTddState.mockReturnValue(enabledTddState({ current: "red" }));
 
 		const result = await handleToolCall(
 			{
 				toolCallId: "1",
 				toolName: "edit",
-				input: { path: "/x/.pi/tdd/state.json" },
+				input: { path: "/x/.tdd/state.json" },
 			},
 			{ cwd: "/x" } as any,
 			makeCallDeps(),
@@ -314,7 +314,7 @@ describe("handleToolCall", () => {
 		);
 
 		expect(mockTddLog).toHaveBeenCalledWith(
-			"/x/.pi/tdd",
+			"/x/.tdd",
 			"WARN",
 			"tool_call: private git history repaired",
 			{ reason: 'HEAD commit "tdd: refactor" is not a TDD snapshot.' },
@@ -370,14 +370,14 @@ describe("handleToolResult", () => {
 		expect(mockLoadTddState).not.toHaveBeenCalled();
 	});
 
-	it("reverts .pi/tdd/ violations from cached state", async () => {
+	it("reverts .tdd/ violations from cached state", async () => {
 		mockIsBashToolResult.mockReturnValue(true);
 		preBashStashes.set("exploit-id", {
 			stashHash: "stash-exploit",
 			phase: "green",
 			config: VALID_CONFIG,
 		});
-		mockChangesSince.mockReturnValue([".pi/tdd/state.json"]);
+		mockChangesSince.mockReturnValue([".tdd/state.json"]);
 
 		const result = await handleToolResult(
 			{
@@ -391,7 +391,7 @@ describe("handleToolResult", () => {
 
 		expect(mockRestoreFilesTo).toHaveBeenCalledWith(
 			"/x",
-			[".pi/tdd/state.json"],
+			[".tdd/state.json"],
 			"stash-exploit",
 		);
 		expect(result).toBeDefined();

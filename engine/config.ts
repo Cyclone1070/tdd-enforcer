@@ -1,11 +1,9 @@
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { RULES_FILE, tddPath } from "./paths.js";
 import type { Config } from "./types.js";
 
-const TDD_DIR = ".pi/tdd";
-
 export function configPath(projectRoot: string): string {
-	return join(projectRoot, TDD_DIR, "rules.json");
+	return tddPath(projectRoot, RULES_FILE);
 }
 
 export function loadConfig(projectRoot: string): Config {

@@ -13,7 +13,12 @@ import {
 	gitStashCreate,
 	restoreFilesTo,
 } from "../../engine/git.js";
-import { loadTddState, tddLog } from "../../engine/index.js";
+import {
+	isTddPath,
+	loadTddState,
+	resolveTddDir,
+	tddLog,
+} from "../../engine/index.js";
 import type { Config, Phase } from "../../engine/types.js";
 
 export async function handleToolCall(
@@ -39,7 +44,7 @@ export async function handleToolCall(
 	},
 ): Promise<undefined | { block: boolean; reason: string }> {
 	const root = ctx.cwd;
-	const tddDir = join(root, ".pi", "tdd");
+	const tddDir = join(root, resolveTddDir(root));
 	const tdd = deps.loadTddState(root);
 	if (!tdd.ok) {
 		deps.tddLog(
@@ -115,9 +120,9 @@ export async function handleToolCall(
 	// Patterns in rules.json are relative to repo root; convert absolute path
 	const relPath = relative(root, filePath);
 
-	// Never allow writes to .pi/tdd/ when TDD is active
-	if (relPath.startsWith(".pi/tdd/")) {
-		deps.tddLog(tddDir, "INFO", "tool_call: blocked .pi/tdd/ file", {
+	// Never allow writes to TDD bookkeeping, in either layout.
+	if (isTddPath(relPath)) {
+		deps.tddLog(tddDir, "INFO", "tool_call: blocked TDD bookkeeping file", {
 			toolName,
 			relPath,
 		});
@@ -185,7 +190,7 @@ export async function handleToolResult(
 	if (!deps.isBashToolResult(event)) return;
 
 	const root = ctx.cwd;
-	const tddDir = join(root, ".pi", "tdd");
+	const tddDir = join(root, resolveTddDir(root));
 
 	// Get the pre-bash stash for this tool call
 	const entry = deps.preBashStashes.get(event.toolCallId);
@@ -211,12 +216,12 @@ export async function handleToolResult(
 		return;
 	}
 
-	// Revert .pi/tdd/ violations unconditionally.
+	// Revert TDD bookkeeping violations unconditionally.
 	// The stash was created before bash ran, so it has the real pre-bash state.
-	const tddViolations = changed.filter((f) => f.startsWith(".pi/tdd/"));
+	const tddViolations = changed.filter(isTddPath);
 	if (tddViolations.length > 0) {
 		deps.restoreFilesTo(root, tddViolations, stashHash);
-		deps.tddLog(tddDir, "WARN", "tool_result: reverted .pi/tdd/ file", {
+		deps.tddLog(tddDir, "WARN", "tool_result: reverted TDD bookkeeping file", {
 			violations: tddViolations,
 		});
 	}
@@ -250,9 +255,9 @@ export async function handleToolResult(
 		deps.restoreFilesTo(root, phaseViolations, stashHash);
 	}
 
-	// Find remaining allowed changes (exclude .pi/tdd/)
+	// Find remaining allowed changes (exclude TDD bookkeeping)
 	const cmdAllowed = changed.filter(
-		(f) => deps.isAllowed(f, phase, config) && !f.startsWith(".pi/tdd/"),
+		(f) => deps.isAllowed(f, phase, config) && !isTddPath(f),
 	);
 
 	return formatWarning(event, phase, cmdViolations, cmdAllowed);
@@ -270,7 +275,7 @@ function formatWarning(
 		.join("");
 	let warning = `\n\n⛔ ${phase.toUpperCase()}: reverted locked files modified by bash:`;
 	for (const f of cmdViolations) warning += `\n  - ${f}`;
-	if (cmdViolations.some((f) => f.startsWith(".pi/tdd/"))) {
+	if (cmdViolations.some(isTddPath)) {
 		warning += `\n\nIf TDD reverts too much of your progress, reduce the scope of each TDD cycle to minimise lost progress.`;
 	}
 	if (cmdAllowed.length > 0) {

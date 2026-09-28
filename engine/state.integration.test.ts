@@ -1,8 +1,14 @@
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import {
+	existsSync,
+	mkdirSync,
+	renameSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { headMessage, snapshot } from "./git.js";
+import { headMessage, modifiedFiles, snapshot } from "./git.js";
 import { revertPhase } from "./orchestrate.js";
 import { loadPhaseState, loadTddState, savePhaseState } from "./state.js";
 
@@ -23,8 +29,8 @@ beforeEach(() => {
 	process.env.GIT_COMMITTER_EMAIL ??= "tdd@test.local";
 
 	root = join(tmpdir(), `tdd-state-integration-${Date.now()}-${Math.random()}`);
-	mkdirSync(join(root, ".pi", "tdd"), { recursive: true });
-	writeFileSync(join(root, ".pi", "tdd", "rules.json"), JSON.stringify(RULES));
+	mkdirSync(join(root, ".tdd"), { recursive: true });
+	writeFileSync(join(root, ".tdd", "rules.json"), JSON.stringify(RULES));
 });
 
 afterEach(() => {
@@ -49,7 +55,7 @@ describe("legacy refactor state with real git", () => {
 
 		// Fabricate the old three-phase world: legacy state value + label.
 		writeFileSync(
-			join(root, ".pi", "tdd", "state.json"),
+			join(root, ".tdd", "state.json"),
 			JSON.stringify({ enabled: true, current: "refactor" }),
 		);
 		snapshot(root, "refactor");
@@ -72,7 +78,7 @@ describe("broken private git with real fs", () => {
 		savePhaseState(root, { enabled: true, current: "green" });
 
 		// Corrupt the git dir so real git commands fail.
-		writeFileSync(join(root, ".pi", "tdd", ".git", "HEAD"), "garbage\n");
+		writeFileSync(join(root, ".tdd", ".git", "HEAD"), "garbage\n");
 
 		const result = loadTddState(root);
 		expect(result.ok).toBe(true);
@@ -105,5 +111,94 @@ describe("revertPhase with real git", () => {
 		expect(result.message).toMatch(/corrupt/i);
 		expect(result.newState).toEqual({ enabled: true, current: "red" });
 		expect(headMessage(root)).toBe("tdd: red");
+	});
+});
+
+describe("legacy .pi/tdd layout with real git", () => {
+	it("keeps working when only .pi/tdd exists", () => {
+		const legacyRoot = join(
+			tmpdir(),
+			`tdd-legacy-${Date.now()}-${Math.random()}`,
+		);
+		mkdirSync(join(legacyRoot, ".pi", "tdd"), { recursive: true });
+		writeFileSync(
+			join(legacyRoot, ".pi", "tdd", "rules.json"),
+			JSON.stringify(RULES),
+		);
+
+		try {
+			const result = loadTddState(legacyRoot);
+			expect(result.ok).toBe(true);
+			if (!result.ok) return;
+			expect(result.warning).toBeUndefined();
+
+			savePhaseState(legacyRoot, { enabled: true, current: "green" });
+			expect(existsSync(join(legacyRoot, ".pi", "tdd", "state.json"))).toBe(
+				true,
+			);
+			expect(existsSync(join(legacyRoot, ".tdd"))).toBe(false);
+		} finally {
+			rmSync(legacyRoot, { recursive: true, force: true });
+		}
+	});
+});
+
+describe("migrating .pi/tdd to .tdd", () => {
+	it("keeps state and snapshot history across the directory move", () => {
+		const legacyRoot = join(
+			tmpdir(),
+			`tdd-migrate-${Date.now()}-${Math.random()}`,
+		);
+		mkdirSync(join(legacyRoot, ".pi", "tdd"), { recursive: true });
+		writeFileSync(
+			join(legacyRoot, ".pi", "tdd", "rules.json"),
+			JSON.stringify(RULES),
+		);
+
+		try {
+			// Live legacy project: enabled, GREEN, with one snapshot in history.
+			loadTddState(legacyRoot);
+			savePhaseState(legacyRoot, { enabled: true, current: "green" });
+			snapshot(legacyRoot, "green");
+			expect(headMessage(legacyRoot)).toBe("tdd: green");
+
+			// The documented migration: turn TDD off, move the directory,
+			// turn it back on.
+			savePhaseState(legacyRoot, { enabled: false, current: "green" });
+			renameSync(join(legacyRoot, ".pi", "tdd"), join(legacyRoot, ".tdd"));
+
+			const moved = loadTddState(legacyRoot);
+			expect(moved.ok).toBe(true);
+			if (!moved.ok) return;
+			expect(moved.state).toEqual({ enabled: false, current: "green" });
+			expect(moved.warning).toBeUndefined();
+			expect(headMessage(legacyRoot)).toBe("tdd: green");
+
+			// Until the next snapshot the private repo still tracks the old
+			// bookkeeping paths, so it reports them as deleted.
+			expect(modifiedFiles(legacyRoot)).toContain(".pi/tdd/.gitignore");
+
+			// Enabling again is what the adapter does: snapshot, then enable.
+			snapshot(legacyRoot, moved.state.current);
+			savePhaseState(legacyRoot, { enabled: true, current: "green" });
+
+			const result = loadTddState(legacyRoot);
+			expect(result.ok).toBe(true);
+			if (!result.ok) return;
+			expect(result.state).toEqual({ enabled: true, current: "green" });
+			expect(loadPhaseState(legacyRoot)).toEqual({
+				enabled: true,
+				current: "green",
+			});
+			expect(headMessage(legacyRoot)).toBe("tdd: green");
+
+			// The private repo now tracks the new layout only: the old paths are
+			// gone from the tree, so a hard reset can no longer resurrect them.
+			// (state.json differs from the snapshot because enabling rewrote it.)
+			const tracked = modifiedFiles(legacyRoot);
+			expect(tracked.some((file) => file.startsWith(".pi/tdd"))).toBe(false);
+		} finally {
+			rmSync(legacyRoot, { recursive: true, force: true });
+		}
 	});
 });

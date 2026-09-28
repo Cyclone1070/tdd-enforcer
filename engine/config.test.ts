@@ -23,7 +23,7 @@ describe("loadConfig", () => {
 
 	it("loads config from rules.json", () => {
 		withTempDir((dir) => {
-			const tddDir = join(dir, ".pi", "tdd");
+			const tddDir = join(dir, ".tdd");
 			mkdirSync(tddDir, { recursive: true });
 			writeFileSync(
 				join(tddDir, "rules.json"),
@@ -44,7 +44,7 @@ describe("loadConfig", () => {
 
 	it("supports multiple test commands", () => {
 		withTempDir((dir) => {
-			const tddDir = join(dir, ".pi", "tdd");
+			const tddDir = join(dir, ".tdd");
 			mkdirSync(tddDir, { recursive: true });
 			writeFileSync(
 				join(tddDir, "rules.json"),
@@ -63,7 +63,7 @@ describe("loadConfig", () => {
 
 	it("defaults timeoutSeconds to 120 when omitted", () => {
 		withTempDir((dir) => {
-			const tddDir = join(dir, ".pi", "tdd");
+			const tddDir = join(dir, ".tdd");
 			mkdirSync(tddDir, { recursive: true });
 			writeFileSync(
 				join(tddDir, "rules.json"),
@@ -82,7 +82,7 @@ describe("loadConfig", () => {
 	describe("validation — throws on invalid content", () => {
 		it("throws when blockedInRed is not an array", () => {
 			withTempDir((dir) => {
-				const tddDir = join(dir, ".pi", "tdd");
+				const tddDir = join(dir, ".tdd");
 				mkdirSync(tddDir, { recursive: true });
 				writeFileSync(
 					join(tddDir, "rules.json"),
@@ -99,7 +99,7 @@ describe("loadConfig", () => {
 
 		it("throws when blockedInGreen is not an array", () => {
 			withTempDir((dir) => {
-				const tddDir = join(dir, ".pi", "tdd");
+				const tddDir = join(dir, ".tdd");
 				mkdirSync(tddDir, { recursive: true });
 				writeFileSync(
 					join(tddDir, "rules.json"),
@@ -116,7 +116,7 @@ describe("loadConfig", () => {
 
 		it("throws when testCommands is not an array", () => {
 			withTempDir((dir) => {
-				const tddDir = join(dir, ".pi", "tdd");
+				const tddDir = join(dir, ".tdd");
 				mkdirSync(tddDir, { recursive: true });
 				writeFileSync(
 					join(tddDir, "rules.json"),
@@ -133,7 +133,7 @@ describe("loadConfig", () => {
 
 		it("throws on malformed JSON", () => {
 			withTempDir((dir) => {
-				const tddDir = join(dir, ".pi", "tdd");
+				const tddDir = join(dir, ".tdd");
 				mkdirSync(tddDir, { recursive: true });
 				writeFileSync(join(tddDir, "rules.json"), "not json{{", "utf-8");
 				expect(() => loadConfig(dir)).toThrow();
@@ -142,7 +142,7 @@ describe("loadConfig", () => {
 
 		it("throws when blockedInRed is empty", () => {
 			withTempDir((dir) => {
-				const tddDir = join(dir, ".pi", "tdd");
+				const tddDir = join(dir, ".tdd");
 				mkdirSync(tddDir, { recursive: true });
 				writeFileSync(
 					join(tddDir, "rules.json"),
@@ -159,7 +159,7 @@ describe("loadConfig", () => {
 
 		it("throws when blockedInGreen is empty", () => {
 			withTempDir((dir) => {
-				const tddDir = join(dir, ".pi", "tdd");
+				const tddDir = join(dir, ".tdd");
 				mkdirSync(tddDir, { recursive: true });
 				writeFileSync(
 					join(tddDir, "rules.json"),
@@ -176,7 +176,7 @@ describe("loadConfig", () => {
 
 		it("throws when testCommands is empty", () => {
 			withTempDir((dir) => {
-				const tddDir = join(dir, ".pi", "tdd");
+				const tddDir = join(dir, ".tdd");
 				mkdirSync(tddDir, { recursive: true });
 				writeFileSync(
 					join(tddDir, "rules.json"),
@@ -193,7 +193,7 @@ describe("loadConfig", () => {
 
 		it("throws when blockedInRed contains non-strings", () => {
 			withTempDir((dir) => {
-				const tddDir = join(dir, ".pi", "tdd");
+				const tddDir = join(dir, ".tdd");
 				mkdirSync(tddDir, { recursive: true });
 				writeFileSync(
 					join(tddDir, "rules.json"),
@@ -210,7 +210,7 @@ describe("loadConfig", () => {
 
 		it("throws when blockedInGreen contains non-strings", () => {
 			withTempDir((dir) => {
-				const tddDir = join(dir, ".pi", "tdd");
+				const tddDir = join(dir, ".tdd");
 				mkdirSync(tddDir, { recursive: true });
 				writeFileSync(
 					join(tddDir, "rules.json"),
@@ -227,7 +227,7 @@ describe("loadConfig", () => {
 
 		it("throws when testCommands contains non-strings", () => {
 			withTempDir((dir) => {
-				const tddDir = join(dir, ".pi", "tdd");
+				const tddDir = join(dir, ".tdd");
 				mkdirSync(tddDir, { recursive: true });
 				writeFileSync(
 					join(tddDir, "rules.json"),

@@ -9,18 +9,31 @@ import {
 	snapshot,
 	stageFiles,
 } from "./git.js";
+import {
+	legacyDirWarning,
+	RULES_FILE,
+	resolveTddDir,
+	resolveTddLayout,
+	STATE_FILE,
+	tddPath,
+} from "./paths.js";
 import { nextPhase } from "./transition.js";
 import type { Config, Phase, PhaseState } from "./types.js";
 import { isPhase, parseTddLabel } from "./types.js";
 
-const TDD_DIR = ".pi/tdd";
-
 export type TddLoadResult =
-	| { ok: true; state: PhaseState; config: Config; repaired?: string }
+	| {
+			ok: true;
+			state: PhaseState;
+			config: Config;
+			repaired?: string;
+			/** Set when both `.tdd/` and `.pi/tdd/` exist; `.tdd/` wins. */
+			warning?: string;
+	  }
 	| { ok: false; reason: string };
 
 export function phaseStatePath(projectRoot: string): string {
-	return join(projectRoot, TDD_DIR, "state.json");
+	return tddPath(projectRoot, STATE_FILE);
 }
 
 function ensureDir(path: string): void {
@@ -113,7 +126,7 @@ export function repairHistory(
 	deps.snapshot(root, "red");
 	const state: PhaseState = { enabled, current: "red" };
 	deps.savePhaseState(root, state);
-	deps.stageFiles(root, [".pi/tdd/state.json"]);
+	deps.stageFiles(root, [`${resolveTddDir(root)}/${STATE_FILE}`]);
 	return state;
 }
 
@@ -156,21 +169,21 @@ export function loadTddState(
 		stageFiles,
 	},
 ): TddLoadResult {
-	const tddDir = join(root, TDD_DIR);
+	const layout = resolveTddLayout(root, deps);
+	const warning = legacyDirWarning(layout);
+	const tddDir = join(root, layout.dir);
 	if (!deps.existsSync(tddDir)) {
 		return {
 			ok: false,
-			reason:
-				"Missing .pi/tdd/ directory. See the tdd-enforcer skill to learn how to set up TDD configs.",
+			reason: `Missing ${layout.dir}/ directory. See the tdd-enforcer skill to learn how to set up TDD configs.`,
 		};
 	}
 
-	const rulesPath = join(tddDir, "rules.json");
+	const rulesPath = join(tddDir, RULES_FILE);
 	if (!deps.existsSync(rulesPath)) {
 		return {
 			ok: false,
-			reason:
-				"Missing .pi/tdd/rules.json. See the tdd-enforcer skill to learn how to set up TDD configs.",
+			reason: `Missing ${layout.dir}/${RULES_FILE}. See the tdd-enforcer skill to learn how to set up TDD configs.`,
 		};
 	}
 
@@ -180,7 +193,7 @@ export function loadTddState(
 	} catch (e) {
 		return {
 			ok: false,
-			reason: `Invalid .pi/tdd/rules.json: ${(e as Error).message}. See the tdd-enforcer skill.`,
+			reason: `Invalid ${layout.dir}/${RULES_FILE}: ${(e as Error).message}. See the tdd-enforcer skill.`,
 		};
 	}
 
@@ -206,7 +219,7 @@ export function loadTddState(
 	});
 	if (probe.kind === "unusable") {
 		const state = repairHistory(root, fileState.enabled, deps);
-		return { ok: true, state, config, repaired: probe.reason };
+		return { ok: true, state, config, repaired: probe.reason, warning };
 	}
 
 	// A valid state.json phase is authoritative.
@@ -215,6 +228,7 @@ export function loadTddState(
 			ok: true,
 			state: { enabled: fileState.enabled, current: fileState.current },
 			config,
+			warning,
 		};
 	}
 
@@ -224,6 +238,6 @@ export function loadTddState(
 			? { enabled: false, current: "red" }
 			: { enabled: true, current: nextPhase(probe.phase) ?? "red" };
 	deps.savePhaseState(root, state);
-	deps.stageFiles(root, [".pi/tdd/state.json"]);
-	return { ok: true, state, config };
+	deps.stageFiles(root, [`${layout.dir}/${STATE_FILE}`]);
+	return { ok: true, state, config, warning };
 }

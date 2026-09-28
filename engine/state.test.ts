@@ -16,7 +16,7 @@ function withTempDir(fn: (dir: string) => void) {
 
 function withStateFile(raw: string, fn: (dir: string) => void) {
 	withTempDir((dir) => {
-		const tddDir = join(dir, ".pi", "tdd");
+		const tddDir = join(dir, ".tdd");
 		mkdirSync(tddDir, { recursive: true });
 		writeFileSync(join(tddDir, "state.json"), raw, "utf-8");
 		fn(dir);
@@ -150,11 +150,11 @@ describe("loadTddState", () => {
 		mockStageFiles = vi.fn();
 	});
 
-	it("returns missing dir error when .pi/tdd does not exist", () => {
+	it("returns missing dir error when .tdd does not exist", () => {
 		mockExistsSync.mockReturnValue(false);
 		const result = loadTddState("/test", makeDeps());
 		expect(result.ok).toBe(false);
-		if (!result.ok) expect(result.reason).toContain("Missing .pi/tdd/");
+		if (!result.ok) expect(result.reason).toContain("Missing .tdd/");
 	});
 
 	it("returns missing rules.json error when only dir exists", () => {
@@ -172,8 +172,7 @@ describe("loadTddState", () => {
 		});
 		const result = loadTddState("/test", makeDeps());
 		expect(result.ok).toBe(false);
-		if (!result.ok)
-			expect(result.reason).toContain("Invalid .pi/tdd/rules.json");
+		if (!result.ok) expect(result.reason).toContain("Invalid .tdd/rules.json");
 	});
 
 	it("initialises git when the private repo is missing", () => {
@@ -222,9 +221,7 @@ describe("loadTddState", () => {
 			enabled: false,
 			current: "red",
 		});
-		expect(mockStageFiles).toHaveBeenCalledWith("/test", [
-			".pi/tdd/state.json",
-		]);
+		expect(mockStageFiles).toHaveBeenCalledWith("/test", [".tdd/state.json"]);
 	});
 
 	it("repairs when HEAD is not a TDD snapshot", () => {
@@ -274,9 +271,7 @@ describe("loadTddState", () => {
 			enabled: true,
 			current: "green",
 		});
-		expect(mockStageFiles).toHaveBeenCalledWith("/test", [
-			".pi/tdd/state.json",
-		]);
+		expect(mockStageFiles).toHaveBeenCalledWith("/test", [".tdd/state.json"]);
 	});
 
 	it("recovers enabled red from HEAD tdd:green when state.json has no phase", () => {

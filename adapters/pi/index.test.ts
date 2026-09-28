@@ -98,14 +98,14 @@ describe("handleTddOn", () => {
 	it("shows error when setup invalid", async () => {
 		mockLoadTddState.mockReturnValue({
 			ok: false,
-			reason: "Missing .pi/tdd/",
+			reason: "Missing .tdd/",
 		});
 
 		const ctx = makeCtx();
 		await handleTddOn(ctx, makeDeps());
 
 		expect(ctx.notifications).toHaveLength(1);
-		expect(ctx.notifications[0].message).toContain("Missing .pi/tdd/");
+		expect(ctx.notifications[0].message).toContain("Missing .tdd/");
 		expect(ctx.notifications[0].type).toBe("error");
 	});
 });
@@ -170,14 +170,14 @@ describe("handleTddOff", () => {
 	it("shows error when setup invalid", async () => {
 		mockLoadTddState.mockReturnValue({
 			ok: false,
-			reason: "Missing .pi/tdd/",
+			reason: "Missing .tdd/",
 		});
 
 		const ctx = makeCtx();
 		await handleTddOff(ctx, makeDeps());
 
 		expect(ctx.notifications).toHaveLength(1);
-		expect(ctx.notifications[0].message).toContain("Missing .pi/tdd/");
+		expect(ctx.notifications[0].message).toContain("Missing .tdd/");
 		expect(ctx.notifications[0].type).toBe("error");
 	});
 });
@@ -236,14 +236,14 @@ describe("handleTddStatus", () => {
 	it("shows error when setup invalid", async () => {
 		mockLoadTddState.mockReturnValue({
 			ok: false,
-			reason: "Missing .pi/tdd/",
+			reason: "Missing .tdd/",
 		});
 
 		const ctx = makeCtx();
 		await handleTddStatus(ctx, makeDeps());
 
 		expect(ctx.notifications).toHaveLength(1);
-		expect(ctx.notifications[0].message).toContain("Missing .pi/tdd/");
+		expect(ctx.notifications[0].message).toContain("Missing .tdd/");
 		expect(ctx.notifications[0].type).toBe("error");
 	});
 });
@@ -300,14 +300,14 @@ describe("handleTddReset", () => {
 	it("shows error when setup invalid", async () => {
 		mockLoadTddState.mockReturnValue({
 			ok: false,
-			reason: "Missing .pi/tdd/",
+			reason: "Missing .tdd/",
 		});
 
 		const ctx = makeCtx();
 		await handleTddReset(ctx, makeDeps());
 
 		expect(ctx.notifications).toHaveLength(1);
-		expect(ctx.notifications[0].message).toContain("Missing .pi/tdd/");
+		expect(ctx.notifications[0].message).toContain("Missing .tdd/");
 		expect(ctx.notifications[0].type).toBe("error");
 	});
 });
@@ -350,7 +350,7 @@ describe("handleTddJump", () => {
 	}
 
 	it("shows error when TDD not setup", async () => {
-		mockLoadTddState.mockReturnValue({ ok: false, reason: "Missing .pi/tdd/" });
+		mockLoadTddState.mockReturnValue({ ok: false, reason: "Missing .tdd/" });
 		const ctx = makeCtx();
 		await handleTddJump("green", ctx, makeDeps());
 		expect(ctx.notifications[0].message).toContain("Missing");

@@ -6,6 +6,7 @@ import type {
 import {
 	loadTddState,
 	resetGit,
+	resolveTddDir,
 	savePhaseState,
 	snapshot,
 	tddLog,
@@ -28,7 +29,7 @@ export async function handleTddOn(
 	},
 ): Promise<void> {
 	const root = ctx.cwd;
-	const tddDir = join(root, ".pi", "tdd");
+	const tddDir = join(root, resolveTddDir(root));
 
 	deps.tddLog(tddDir, "INFO", "tdd:on: starting");
 
@@ -81,7 +82,7 @@ export async function handleTddOff(
 	},
 ): Promise<void> {
 	const root = ctx.cwd;
-	const tddDir = join(root, ".pi", "tdd");
+	const tddDir = join(root, resolveTddDir(root));
 
 	const setup = deps.loadTddState(root);
 	if (!setup.ok) {
@@ -119,7 +120,7 @@ export async function handleTddStatus(
 	},
 ): Promise<void> {
 	const root = ctx.cwd;
-	const tddDir = join(root, ".pi", "tdd");
+	const tddDir = join(root, resolveTddDir(root));
 	const result = deps.loadTddState(root);
 
 	if (!result.ok) {
@@ -168,7 +169,7 @@ export async function handleTddJump(
 	},
 ): Promise<void> {
 	const root = ctx.cwd;
-	const tddDir = join(root, ".pi", "tdd");
+	const tddDir = join(root, resolveTddDir(root));
 
 	const setup = deps.loadTddState(root);
 	if (!setup.ok) {
@@ -221,7 +222,7 @@ export async function handleTddReset(
 	},
 ): Promise<void> {
 	const root = ctx.cwd;
-	const tddDir = join(root, ".pi", "tdd");
+	const tddDir = join(root, resolveTddDir(root));
 
 	deps.tddLog(tddDir, "INFO", "tdd:reset: starting");
 

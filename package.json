@@ -2,7 +2,7 @@
 	"name": "tdd-enforcer",
 	"version": "0.4.0",
 	"type": "module",
-	"description": "TDD enforcer extension for the pi coding agent — enforces Red-Green phases with file access restrictions and transition gates",
+	"description": "TDD enforcer plugin \u2014 enforces Red-Green phases with file access restrictions and transition gates, for the pi coding agent and the DeepSeek Harness",
 	"license": "MIT",
 	"author": "Cyclone1070 <hoangmai1070@gmail.com>",
 	"repository": {
@@ -13,14 +13,26 @@
 		"url": "https://github.com/Cyclone1070/tdd-enforcer/issues"
 	},
 	"homepage": "https://github.com/Cyclone1070/tdd-enforcer#readme",
+	"main": "./dist/dsh/plugin.js",
+	"files": [
+		"dist",
+		"adapters",
+		"engine",
+		"skills",
+		"cordis.patch.yml",
+		"README.md"
+	],
 	"scripts": {
+		"build": "node scripts/build-dsh.mjs",
+		"preflight": "node scripts/preflight-dsh.mjs",
 		"check": "biome check --write . && vitest run",
 		"lint": "biome check .",
 		"lint:fix": "biome check --write .",
 		"test": "vitest run"
 	},
 	"keywords": [
-		"pi-package"
+		"pi-package",
+		"dsh-plugin"
 	],
 	"dependencies": {
 		"picomatch": "^4.0.4"
@@ -29,6 +41,7 @@
 		"@biomejs/biome": "^2.5.0",
 		"@earendil-works/pi-coding-agent": "^0.79.6",
 		"@types/node": "^25.9.3",
+		"esbuild": "^0.27.7",
 		"typebox": "^1.2.16",
 		"vitest": "^3"
 	},
@@ -39,5 +52,10 @@
 		"skills": [
 			"./skills"
 		]
+	},
+	"dsh": {
+		"bundle": {
+			"patch": "./cordis.patch.yml"
+		}
 	}
 }

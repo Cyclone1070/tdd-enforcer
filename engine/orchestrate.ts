@@ -7,6 +7,7 @@ import {
 	stageFiles as realStageFiles,
 	undoLastCommit as realUndoLastCommit,
 } from "./git.js";
+import { resolveTddDir } from "./paths.js";
 import {
 	savePhaseState as realSavePhaseState,
 	repairHistory,
@@ -77,7 +78,7 @@ export async function advancePhase(
 			message:
 				`BLOCKED: files not allowed in ${from.toUpperCase()} phase:\n` +
 				violations.map((f) => `  - ${f}`).join("\n") +
-				`\nRevert or remove them before proceeding.\n\nInspect with: cd .pi/tdd && git diff HEAD -- ${violations[0]}`,
+				`\nRevert or remove them before proceeding.\n\nInspect with: cd ${resolveTddDir(root)} && git diff HEAD -- ${violations[0]}`,
 		};
 	}
 

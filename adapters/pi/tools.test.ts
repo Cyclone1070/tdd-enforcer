@@ -70,11 +70,11 @@ describe("executeNextPhase", () => {
 		mockLoadTddState.mockReturnValue({
 			ok: false,
 			reason:
-				"Missing .pi/tdd/ directory. See the tdd-enforcer skill to learn how to set up TDD configs.",
+				"Missing .tdd/ directory. See the tdd-enforcer skill to learn how to set up TDD configs.",
 		});
 		await expect(
 			executeNextPhase({ cwd: "/test" } as any, makeDeps()),
-		).rejects.toThrow("Missing .pi/tdd/");
+		).rejects.toThrow("Missing .tdd/");
 	});
 
 	it("throws when TDD disabled", async () => {
@@ -353,11 +353,11 @@ describe("executePreviousPhase", () => {
 	it("throws when TDD not setup", async () => {
 		mockLoadTddState.mockReturnValue({
 			ok: false,
-			reason: "Missing .pi/tdd/ directory.",
+			reason: "Missing .tdd/ directory.",
 		});
 		await expect(
 			executePreviousPhase({ cwd: "/test" } as any, makeDeps()),
-		).rejects.toThrow("Missing .pi/tdd/");
+		).rejects.toThrow("Missing .tdd/");
 	});
 
 	it("throws when TDD disabled", async () => {
@@ -480,11 +480,11 @@ describe("executeTddStatus", () => {
 	it("throws when TDD not setup", async () => {
 		mockLoadTddState.mockReturnValue({
 			ok: false,
-			reason: "Missing .pi/tdd/ directory.",
+			reason: "Missing .tdd/ directory.",
 		});
 		await expect(
 			executeTddStatus({ cwd: "/test" } as any, makeDeps()),
-		).rejects.toThrow("Missing .pi/tdd/");
+		).rejects.toThrow("Missing .tdd/");
 	});
 
 	it("returns status details when TDD disabled", async () => {

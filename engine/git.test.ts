@@ -57,7 +57,7 @@ describe("git operations", () => {
 		expect(deps.writeFileSync).toHaveBeenCalled();
 		// Every git command targets the private repo, not the main project .git
 		for (const call of (deps.execSync as any).mock.calls) {
-			expect(call[1].env.GIT_DIR).toBe("/test/.pi/tdd/.git");
+			expect(call[1].env.GIT_DIR).toBe("/test/.tdd/.git");
 			expect(call[1].env.GIT_WORK_TREE).toBe("/test");
 		}
 	});
@@ -150,19 +150,19 @@ describe("git operations", () => {
 		deps.existsSync = vi
 			.fn()
 			.mockImplementation(
-				(p: string) => p.includes(".pi/tdd/") && !p.endsWith(".git"),
+				(p: string) => p.includes(".tdd/") && !p.endsWith(".git"),
 			);
 		initGit("/test", deps);
 		const call = (deps.execSync as any).mock.calls.find((c: any[]) =>
 			c[0].includes("git add -f"),
 		);
 		expect(call).toBeDefined();
-		expect(call[0]).toContain(".pi/tdd/state.json");
-		expect(call[0]).toContain(".pi/tdd/rules.json");
-		expect(call[0]).toContain(".pi/tdd/.gitignore");
+		expect(call[0]).toContain(".tdd/state.json");
+		expect(call[0]).toContain(".tdd/rules.json");
+		expect(call[0]).toContain(".tdd/.gitignore");
 		expect(call[0]).not.toContain("tdd.log");
 		// Isolation: all git commands target the private repo, not the main project .git
-		expect(call[1].env.GIT_DIR).toBe("/test/.pi/tdd/.git");
+		expect(call[1].env.GIT_DIR).toBe("/test/.tdd/.git");
 		expect(call[1].env.GIT_WORK_TREE).toBe("/test");
 	});
 
@@ -170,7 +170,7 @@ describe("git operations", () => {
 		deps.existsSync = vi
 			.fn()
 			.mockImplementation(
-				(p: string) => p.includes(".pi/tdd/") && !p.endsWith(".git"),
+				(p: string) => p.includes(".tdd/") && !p.endsWith(".git"),
 			);
 		initGit("/test", deps);
 		const calls = (deps.execSync as any).mock.calls.map((c: any[]) => c[0]);
@@ -191,21 +191,21 @@ describe("git operations", () => {
 			.fn()
 			.mockImplementation(
 				(p: string) =>
-					p.includes(".pi/tdd/state.json") ||
-					p.includes(".pi/tdd/rules.json") ||
-					p.includes(".pi/tdd/.gitignore"),
+					p.includes(".tdd/state.json") ||
+					p.includes(".tdd/rules.json") ||
+					p.includes(".tdd/.gitignore"),
 			);
 		snapshot("/test", "green", deps);
 		const call = (deps.execSync as any).mock.calls.find((c: any[]) =>
 			c[0].includes("git add -f"),
 		);
 		expect(call).toBeDefined();
-		expect(call[0]).toContain(".pi/tdd/state.json");
-		expect(call[0]).toContain(".pi/tdd/rules.json");
-		expect(call[0]).toContain(".pi/tdd/.gitignore");
+		expect(call[0]).toContain(".tdd/state.json");
+		expect(call[0]).toContain(".tdd/rules.json");
+		expect(call[0]).toContain(".tdd/.gitignore");
 		expect(call[0]).not.toContain("tdd.log");
 		// Isolation: all git commands target the private repo, not the main project .git
-		expect(call[1].env.GIT_DIR).toBe("/test/.pi/tdd/.git");
+		expect(call[1].env.GIT_DIR).toBe("/test/.tdd/.git");
 		expect(call[1].env.GIT_WORK_TREE).toBe("/test");
 	});
 
@@ -215,9 +215,9 @@ describe("git operations", () => {
 			.fn()
 			.mockImplementation(
 				(p: string) =>
-					p.includes(".pi/tdd/state.json") ||
-					p.includes(".pi/tdd/rules.json") ||
-					p.includes(".pi/tdd/.gitignore"),
+					p.includes(".tdd/state.json") ||
+					p.includes(".tdd/rules.json") ||
+					p.includes(".tdd/.gitignore"),
 			);
 		snapshot("/test", "red", deps);
 		const calls = (deps.execSync as any).mock.calls.map((c: any[]) => c[0]);
@@ -276,6 +276,20 @@ describe("headMessage", () => {
 		snapshot("/test", "green", deps);
 		outputs["log -1 --format=%s HEAD"] = "tdd: green\n";
 		expect(headMessage("/test", deps)).toBe("tdd: green");
+	});
+
+	it("keeps git's expected failure off the terminal", () => {
+		const mockExecSync = vi.fn(() => {
+			throw new Error("your current branch does not have any commits yet");
+		});
+		deps = { ...deps, execSync: mockExecSync as any };
+
+		// Callers read HEAD as a probe and repair an unusable history, so the
+		// failure is handled — it is not something to print at the user.
+		expect(() => headMessage("/test", deps)).toThrow(
+			"does not have any commits",
+		);
+		expect((deps.execSync as any).mock.calls[0][1].stdio).toBe("pipe");
 	});
 });
 
@@ -350,6 +364,19 @@ describe("hasParent", () => {
 		expect(hasParent("/test", deps)).toBe(true);
 		undoLastCommit("/test", deps);
 		expect(hasParent("/test", deps)).toBe(false);
+	});
+
+	it("keeps git's expected failure off the terminal", () => {
+		const mockExecSync = vi.fn((cmd: string) => {
+			if (cmd.includes("rev-parse HEAD~1")) throw new Error("unknown revision");
+			return Buffer.from("");
+		});
+		deps = { ...deps, execSync: mockExecSync as any };
+
+		expect(hasParent("/test", deps)).toBe(false);
+		// "No parent commit yet" is a normal answer on a fresh project, so git's
+		// complaint about it must not reach the user's terminal.
+		expect((deps.execSync as any).mock.calls[0][1].stdio).toBe("pipe");
 	});
 });
 
@@ -504,16 +531,36 @@ describe("gitStashCreate", () => {
 		deps = makeDeps();
 	});
 
-	it("returns a hash when tracked file is modified", () => {
-		outputs["stash create --include-untracked"] = "abc123\n";
-		const result = gitStashCreate("/test", deps);
-		expect(result).toBe("abc123");
+	it("writes a baseline commit from the staged working tree", () => {
+		// Staging everything captures untracked content too, which
+		// `git stash create --include-untracked` does not.
+		outputs["write-tree"] = "tree789\n";
+		outputs["rev-parse HEAD"] = "head456\n";
+		outputs["commit-tree"] = "baseline123\n";
+
+		expect(gitStashCreate("/test", deps)).toBe("baseline123");
+
+		const commands = (deps.execSync as any).mock.calls.map(
+			(call: unknown[]) => call[0] as string,
+		);
+		expect(commands.some((cmd: string) => cmd.includes("add -A"))).toBe(true);
+		expect(
+			commands.some((cmd: string) =>
+				cmd.includes('commit-tree tree789 -p head456 -m "tdd: baseline"'),
+			),
+		).toBe(true);
 	});
 
-	it("returns HEAD when working tree is clean", () => {
-		outputs["stash create --include-untracked"] = "";
-		const result = gitStashCreate("/test", deps);
-		expect(result).toBe("HEAD");
+	it("does not use the unreliable stash command", () => {
+		outputs["write-tree"] = "tree789\n";
+		outputs["commit-tree"] = "baseline123\n";
+		gitStashCreate("/test", deps);
+		const commands = (deps.execSync as any).mock.calls.map(
+			(call: unknown[]) => call[0] as string,
+		);
+		expect(commands.some((cmd: string) => cmd.includes("stash create"))).toBe(
+			false,
+		);
 	});
 });
 
@@ -536,32 +583,32 @@ describe("stageFiles", () => {
 			.fn()
 			.mockImplementation(
 				(p: string) =>
-					p.includes(".pi/tdd/state.json") || p.includes(".pi/tdd/rules.json"),
+					p.includes(".tdd/state.json") || p.includes(".tdd/rules.json"),
 			);
-		stageFiles("/test", [".pi/tdd/state.json", ".pi/tdd/rules.json"], deps);
+		stageFiles("/test", [".tdd/state.json", ".tdd/rules.json"], deps);
 		const call = (deps.execSync as any).mock.calls[0];
 		const cmd = call[0] as string;
 		expect(cmd).toContain("git add -f");
-		expect(cmd).toContain(".pi/tdd/state.json");
-		expect(cmd).toContain(".pi/tdd/rules.json");
+		expect(cmd).toContain(".tdd/state.json");
+		expect(cmd).toContain(".tdd/rules.json");
 		// Isolated from main project git
-		expect(call[1].env.GIT_DIR).toBe("/test/.pi/tdd/.git");
+		expect(call[1].env.GIT_DIR).toBe("/test/.tdd/.git");
 		expect(call[1].env.GIT_WORK_TREE).toBe("/test");
 	});
 
 	it("skips files that don't exist", () => {
 		deps.existsSync = vi.fn().mockReturnValue(false);
-		stageFiles("/test", [".pi/tdd/state.json", ".pi/tdd/rules.json"], deps);
+		stageFiles("/test", [".tdd/state.json", ".tdd/rules.json"], deps);
 		expect(deps.execSync).not.toHaveBeenCalled();
 	});
 
 	it("handles a single existing file when others don't exist", () => {
 		deps.existsSync = vi
 			.fn()
-			.mockImplementation((p: string) => p.includes(".pi/tdd/state.json"));
-		stageFiles("/test", [".pi/tdd/state.json", ".pi/tdd/rules.json"], deps);
+			.mockImplementation((p: string) => p.includes(".tdd/state.json"));
+		stageFiles("/test", [".tdd/state.json", ".tdd/rules.json"], deps);
 		const call = (deps.execSync as any).mock.calls[0];
-		expect(call[0]).toContain(".pi/tdd/state.json");
-		expect(call[0]).not.toContain(".pi/tdd/rules.json");
+		expect(call[0]).toContain(".tdd/state.json");
+		expect(call[0]).not.toContain(".tdd/rules.json");
 	});
 });

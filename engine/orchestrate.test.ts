@@ -59,7 +59,7 @@ describe("advancePhase", () => {
 		expect(result.message).toBe(
 			"BLOCKED: files not allowed in RED phase:\n" +
 				"  - src/violation.ts" +
-				"\nRevert or remove them before proceeding.\n\nInspect with: cd .pi/tdd && git diff HEAD -- src/violation.ts",
+				"\nRevert or remove them before proceeding.\n\nInspect with: cd .tdd && git diff HEAD -- src/violation.ts",
 		);
 	});
 
@@ -74,7 +74,7 @@ describe("advancePhase", () => {
 		expect(result.ok).toBe(false);
 		expect(result.message).toContain("src/a.ts");
 		expect(result.message).toContain("src/b.ts");
-		expect(result.message).toContain("cd .pi/tdd && git diff HEAD -- src/a.ts");
+		expect(result.message).toContain("cd .tdd && git diff HEAD -- src/a.ts");
 	});
 
 	it("returns gate failure error when checkGate fails", async () => {
