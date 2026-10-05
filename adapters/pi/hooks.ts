@@ -13,13 +13,28 @@ import {
 	gitStashCreate,
 	restoreFilesTo,
 } from "../../engine/git.js";
+import type { TddSnapshot } from "../../engine/index.js";
 import {
+	captureTddFiles,
 	isTddPath,
 	loadTddState,
 	resolveTddDir,
+	restoreTddFiles,
 	tddLog,
 } from "../../engine/index.js";
 import type { Config, Phase } from "../../engine/types.js";
+
+/**
+ * What one bracketed bash call remembers. `tddFiles` is a byte-exact copy of
+ * the TDD directories, because git cannot see a nested `.git` or anything the
+ * private repo ignores — so it is the wrong instrument for them.
+ */
+export interface PiBracket {
+	stashHash: string;
+	phase: Phase;
+	config: Config;
+	tddFiles: TddSnapshot;
+}
 
 export async function handleToolCall(
 	event: any,
@@ -30,10 +45,7 @@ export async function handleToolCall(
 		isAllowed: typeof isAllowed;
 		tddLog: typeof tddLog;
 		isToolCallEventType: typeof isToolCallEventType;
-		preBashStashes: Map<
-			string,
-			{ stashHash: string; phase: Phase; config: Config }
-		>;
+		preBashStashes: Map<string, PiBracket>;
 	} = {
 		loadTddState,
 		gitStashCreate,
@@ -77,14 +89,20 @@ export async function handleToolCall(
 	if ((event as any).toolName === "bash") {
 		try {
 			const hash = deps.gitStashCreate(root);
+
+			// The capture must come AFTER this call's own log line. The plugin
+			// writes to tdd.log itself, so anything it writes between the
+			// capture and the restore would come back as damage the call caused.
+			deps.tddLog(tddDir, "DEBUG", "tool_call: bash pre-stash created", {
+				toolCallId: event.toolCallId,
+				hash,
+			});
+
 			deps.preBashStashes.set(event.toolCallId, {
 				stashHash: hash,
 				phase,
 				config,
-			});
-			deps.tddLog(tddDir, "DEBUG", "tool_call: bash pre-stash created", {
-				toolCallId: event.toolCallId,
-				hash,
+				tddFiles: captureTddFiles(root),
 			});
 		} catch (e) {
 			deps.tddLog(tddDir, "ERROR", "tool_call: bash pre-stash failed", {
@@ -170,10 +188,7 @@ export async function handleToolResult(
 		changesSince: typeof changesSince;
 		isAllowed: typeof isAllowed;
 		restoreFilesTo: typeof restoreFilesTo;
-		preBashStashes: Map<
-			string,
-			{ stashHash: string; phase: Phase; config: Config }
-		>;
+		preBashStashes: Map<string, PiBracket>;
 	} = {
 		isBashToolResult,
 		loadTddState,
@@ -202,12 +217,39 @@ export async function handleToolResult(
 		return;
 	}
 
-	const { stashHash, phase, config } = entry;
+	const { stashHash, phase, config, tddFiles } = entry;
+
+	// The TDD directories come back from memory, and this runs before — and
+	// independently of — the git diff. Git cannot see a nested `.git` or an
+	// ignored file, and the diff may not be available at all if the command
+	// destroyed the private store.
+	let tddViolations: string[] = [];
+	try {
+		tddViolations = restoreTddFiles(root, tddFiles);
+	} catch (e) {
+		deps.tddLog(tddDir, "ERROR", "tool_result: TDD directory restore failed", {
+			error: (e as Error).message,
+		});
+	}
+	if (tddViolations.length > 0) {
+		deps.tddLog(tddDir, "WARN", "tool_result: reverted TDD bookkeeping file", {
+			violations: tddViolations,
+		});
+	}
 
 	// Diff against pre-bash stash — only changes from THIS command
-	const changed = deps.changesSince(root, stashHash);
+	let changed: string[] = [];
+	try {
+		changed = deps.changesSince(root, stashHash);
+	} catch (e) {
+		// A destroyed store costs the diff, not the revert: the TDD
+		// directories above were already restored from memory.
+		deps.tddLog(tddDir, "ERROR", "tool_result: diff failed", {
+			error: (e as Error).message,
+		});
+	}
 
-	if (changed.length === 0) {
+	if (changed.length === 0 && tddViolations.length === 0) {
 		deps.tddLog(
 			tddDir,
 			"DEBUG",
@@ -216,22 +258,21 @@ export async function handleToolResult(
 		return;
 	}
 
-	// Revert TDD bookkeeping violations unconditionally.
-	// The stash was created before bash ran, so it has the real pre-bash state.
-	const tddViolations = changed.filter(isTddPath);
-	if (tddViolations.length > 0) {
-		deps.restoreFilesTo(root, tddViolations, stashHash);
-		deps.tddLog(tddDir, "WARN", "tool_result: reverted TDD bookkeeping file", {
-			violations: tddViolations,
-		});
+	// The memory pass above already put the TDD directories back, so these are
+	// the paths git can see; restoring them again from the baseline is a no-op.
+	// The log never appears here — it is ignored, which is why memory owns it.
+	const tddFromGit = changed.filter(isTddPath);
+	if (tddFromGit.length > 0) {
+		deps.restoreFilesTo(root, tddFromGit, stashHash);
 	}
 
-	// Check phase-locked violations using cached phase + config
 	const phaseViolations = changed.filter(
-		(f) => !deps.isAllowed(f, phase, config),
+		(f) => !isTddPath(f) && !deps.isAllowed(f, phase, config),
 	);
 
-	const cmdViolations = [...new Set([...tddViolations, ...phaseViolations])];
+	const cmdViolations = [
+		...new Set([...tddViolations, ...tddFromGit, ...phaseViolations]),
+	];
 
 	if (cmdViolations.length === 0) {
 		deps.tddLog(

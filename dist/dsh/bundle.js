@@ -1775,7 +1775,7 @@ var require_picomatch2 = __commonJS({
 });
 
 // adapters/dsh/commands.ts
-import { join as join5 } from "node:path";
+import { join as join6 } from "node:path";
 
 // engine/config.ts
 import { readFileSync } from "node:fs";
@@ -2347,9 +2347,9 @@ Inspect with: cd ${resolveTddDir(root)} && git diff HEAD -- ${violations[0]}`
   if (!gate.passed) {
     return { ok: false, message: gate.message };
   }
-  snap(root, from);
   const newState = { ...state, current: to };
   sps(root, newState);
+  snap(root, from);
   return { ok: true, message: "", newState };
 }
 async function revertPhase(root, state, deps) {
@@ -2382,8 +2382,8 @@ async function revertPhase(root, state, deps) {
   }
   const label = parseTddLabel(headMsg);
   if (!label) return repair();
-  rh(root);
   ulc(root);
+  rh(root);
   const newState = { ...state, current: label };
   sps(root, newState);
   return {
@@ -2427,6 +2427,91 @@ If the RED phase tests were wrong, call \`previous_tdd_phase\` to go back and fi
   }
 }
 
+// engine/tdd-files.ts
+import {
+  existsSync as existsSync5,
+  mkdirSync as mkdirSync4,
+  readFileSync as readFileSync4,
+  statSync,
+  unlinkSync as unlinkSync2,
+  writeFileSync as writeFileSync4
+} from "node:fs";
+import { join as join5 } from "node:path";
+var MAX_CAPTURED_BYTES = 8 * 1024 * 1024;
+var BOOKKEEPING = [STATE_FILE, RULES_FILE, GITIGNORE_FILE];
+var defaultTddFilesDeps = {
+  existsSync: existsSync5,
+  readFileSync: (path) => readFileSync4(path),
+  writeFileSync: (path, data) => writeFileSync4(path, data),
+  mkdirSync: (path) => void mkdirSync4(path, { recursive: true }),
+  unlinkSync: (path) => unlinkSync2(path),
+  statSync: (path) => {
+    const stats = statSync(path);
+    return { size: stats.size, isDirectory: () => stats.isDirectory() };
+  }
+};
+function emptyTddSnapshot() {
+  return { files: /* @__PURE__ */ new Map(), dirs: /* @__PURE__ */ new Set() };
+}
+function captureTddFiles(projectRoot, deps = defaultTddFilesDeps) {
+  const snapshot2 = emptyTddSnapshot();
+  for (const locked of LOCKED_DIRS) {
+    const abs = join5(projectRoot, locked);
+    if (!isDirectory(abs, deps)) continue;
+    snapshot2.dirs.add(locked);
+    for (const name2 of BOOKKEEPING) {
+      const fileAbs = join5(abs, name2);
+      if (!deps.existsSync(fileAbs)) continue;
+      snapshot2.files.set(`${locked}/${name2}`, readCapped(fileAbs, deps));
+    }
+  }
+  return snapshot2;
+}
+function restoreTddFiles(projectRoot, snapshot2, deps = defaultTddFilesDeps) {
+  const restored = [];
+  for (const locked of snapshot2.dirs) {
+    const abs = join5(projectRoot, locked);
+    if (!isDirectory(abs, deps)) {
+      if (deps.existsSync(abs)) deps.unlinkSync(abs);
+      deps.mkdirSync(abs);
+    }
+    for (const name2 of BOOKKEEPING) {
+      const rel = `${locked}/${name2}`;
+      const fileAbs = join5(projectRoot, rel);
+      const captured = snapshot2.files.get(rel);
+      if (captured === void 0) {
+        if (deps.existsSync(fileAbs)) {
+          deps.unlinkSync(fileAbs);
+          restored.push(rel);
+        }
+        continue;
+      }
+      if (captured === null) continue;
+      if (deps.existsSync(fileAbs) && deps.readFileSync(fileAbs).equals(captured)) {
+        continue;
+      }
+      deps.writeFileSync(fileAbs, captured);
+      restored.push(rel);
+    }
+  }
+  return restored;
+}
+function readCapped(abs, deps) {
+  try {
+    if (deps.statSync(abs).size > MAX_CAPTURED_BYTES) return null;
+    return deps.readFileSync(abs);
+  } catch {
+    return null;
+  }
+}
+function isDirectory(abs, deps) {
+  try {
+    return deps.statSync(abs).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
 // adapters/dsh/root.ts
 function sessionIdOf(agent) {
   const id = agent?.id ?? agent?.sessionId;
@@ -2456,7 +2541,7 @@ function rootOf(ctx, invocation) {
 }
 async function enableTdd(ctx, invocation) {
   const root = rootOf(ctx, invocation);
-  const tddDir = join5(root, resolveTddDir(root));
+  const tddDir = join6(root, resolveTddDir(root));
   tddLog(tddDir, "INFO", "tdd-on: starting");
   const setup = loadTddState(root);
   if (!setup.ok) {
@@ -2477,7 +2562,7 @@ async function enableTdd(ctx, invocation) {
 }
 async function disableTdd(ctx, invocation) {
   const root = rootOf(ctx, invocation);
-  const tddDir = join5(root, resolveTddDir(root));
+  const tddDir = join6(root, resolveTddDir(root));
   const setup = loadTddState(root);
   if (!setup.ok) {
     tddLog(tddDir, "WARN", "tdd-off: setup invalid", { reason: setup.reason });
@@ -2495,7 +2580,7 @@ async function disableTdd(ctx, invocation) {
 }
 async function showStatus(ctx, invocation) {
   const root = rootOf(ctx, invocation);
-  const tddDir = join5(root, resolveTddDir(root));
+  const tddDir = join6(root, resolveTddDir(root));
   const result = loadTddState(root);
   if (!result.ok) {
     tddLog(tddDir, "WARN", "tdd-status: setup invalid", {
@@ -2520,7 +2605,7 @@ Test commands: ${config.testCommands.join(", ") || "(none)"}` + (result.warning 
 }
 async function resetTdd(ctx, invocation) {
   const root = rootOf(ctx, invocation);
-  const tddDir = join5(root, resolveTddDir(root));
+  const tddDir = join6(root, resolveTddDir(root));
   tddLog(tddDir, "INFO", "tdd-reset: starting");
   const setup = loadTddState(root);
   if (!setup.ok) {
@@ -2547,7 +2632,7 @@ async function resetTdd(ctx, invocation) {
 }
 async function jumpTo(phase, ctx, invocation) {
   const root = rootOf(ctx, invocation);
-  const tddDir = join5(root, resolveTddDir(root));
+  const tddDir = join6(root, resolveTddDir(root));
   const setup = loadTddState(root);
   if (!setup.ok) {
     tddLog(tddDir, "WARN", `tdd-${phase}: setup invalid`, {
@@ -2615,7 +2700,7 @@ function registerTddCommands(ctx) {
 }
 
 // adapters/dsh/enforcement.ts
-import { join as join6, relative, resolve } from "node:path";
+import { join as join7, relative, resolve } from "node:path";
 var PRECISE_PATH_TOOLS = /* @__PURE__ */ new Set(["write", "edit"]);
 var OWN_TOOLS = /* @__PURE__ */ new Set([
   "next_tdd_phase",
@@ -2684,7 +2769,7 @@ var TddEnforcer = class {
     return projectRootOf(this.ctx, exec2);
   }
   tddDir(root) {
-    return join6(root, resolveTddDir(root));
+    return join7(root, resolveTddDir(root));
   }
   // ── mechanism 1: synchronous guard for write/edit ────────────────────────
   guardExecution(exec2) {
@@ -2729,8 +2814,14 @@ var TddEnforcer = class {
     }
     try {
       const stashHash = gitStashCreate(root);
+      tddLog(tddDir, "DEBUG", "bracket: opened", {
+        toolName: exec2.name,
+        callId: exec2.callId,
+        stashHash
+      });
       this.brackets.set(exec2.callId, {
         stashHash,
+        tddFiles: captureTddFiles(root),
         phase: tdd.state.current,
         config: tdd.config,
         root,
@@ -2739,11 +2830,6 @@ var TddEnforcer = class {
         at: Date.now()
       });
       this.pruneBrackets();
-      tddLog(tddDir, "DEBUG", "bracket: opened", {
-        toolName: exec2.name,
-        callId: exec2.callId,
-        stashHash
-      });
     } catch (error) {
       tddLog(tddDir, "ERROR", "bracket: snapshot failed", {
         toolName: exec2.name,
@@ -2764,10 +2850,6 @@ var TddEnforcer = class {
     const jobId = backgroundJobId(result);
     if (jobId !== void 0) {
       this.jobBrackets.set(jobId, bracket);
-      tddLog(this.tddDir(bracket.root), "DEBUG", "bracket: handed to job", {
-        toolName: exec2.name,
-        jobId
-      });
       return void 0;
     }
     return this.revert(bracket)?.warning;
@@ -2803,6 +2885,15 @@ var TddEnforcer = class {
   revert(bracket) {
     const { root, stashHash, phase, config } = bracket;
     const tddDir = this.tddDir(root);
+    let tddViolations = [];
+    try {
+      tddViolations = restoreTddFiles(root, bracket.tddFiles);
+    } catch (error) {
+      tddLog(tddDir, "ERROR", "bracket: TDD directory restore failed", {
+        toolName: bracket.toolName,
+        error: error.message
+      });
+    }
     let changed;
     try {
       changed = changesSince(root, stashHash);
@@ -2811,12 +2902,15 @@ var TddEnforcer = class {
         toolName: bracket.toolName,
         error: error.message
       });
-      return void 0;
+      changed = [];
     }
-    if (changed.length === 0) return void 0;
-    const tddViolations = changed.filter((f) => isTddPath(f));
-    const phaseViolations = changed.filter((f) => !isAllowed(f, phase, config));
-    const violations = [.../* @__PURE__ */ new Set([...tddViolations, ...phaseViolations])];
+    const tddFromGit = changed.filter((f) => isTddPath(f));
+    const phaseViolations = changed.filter(
+      (f) => !isTddPath(f) && !isAllowed(f, phase, config)
+    );
+    const violations = [
+      .../* @__PURE__ */ new Set([...tddViolations, ...tddFromGit, ...phaseViolations])
+    ];
     if (violations.length === 0) {
       tddLog(tddDir, "DEBUG", "bracket: no violations among changed files", {
         toolName: bracket.toolName,
@@ -2825,8 +2919,8 @@ var TddEnforcer = class {
       return void 0;
     }
     try {
-      if (tddViolations.length > 0) {
-        restoreFilesTo(root, tddViolations, stashHash);
+      if (tddFromGit.length > 0) {
+        restoreFilesTo(root, tddFromGit, stashHash);
       }
       if (phaseViolations.length > 0) {
         restoreFilesTo(root, phaseViolations, stashHash);
@@ -2923,7 +3017,7 @@ function readString(input, key) {
 }
 
 // adapters/dsh/skill.ts
-import { existsSync as existsSync5, readFileSync as readFileSync4 } from "node:fs";
+import { existsSync as existsSync6, readFileSync as readFileSync5 } from "node:fs";
 import { fileURLToPath } from "node:url";
 var CANDIDATES = [
   "../../skills/tdd-enforcer/SKILL.md",
@@ -2951,8 +3045,8 @@ function parseSkill(text) {
 function loadSkillFile(metaUrl) {
   for (const candidate of CANDIDATES) {
     const path = fileURLToPath(new URL(candidate, metaUrl));
-    if (!existsSync5(path)) continue;
-    const parsed = parseSkill(readFileSync4(path, "utf8"));
+    if (!existsSync6(path)) continue;
+    const parsed = parseSkill(readFileSync5(path, "utf8"));
     if (parsed !== void 0) return parsed;
   }
   return void 0;
@@ -2972,7 +3066,7 @@ function registerTddSkill(ctx, metaUrl) {
 
 // adapters/shared/actions.ts
 import { exec } from "node:child_process";
-import { join as join7 } from "node:path";
+import { join as join8 } from "node:path";
 import { promisify } from "node:util";
 var asyncExec = promisify(exec);
 var PI_HINTS = {
@@ -3009,7 +3103,7 @@ var defaultTddStatusDeps = {
   tddLog
 };
 async function runNextPhase(root, signal, deps = defaultNextPhaseDeps, hints = PI_HINTS) {
-  const tddDir = join7(root, resolveTddDir(root));
+  const tddDir = join8(root, resolveTddDir(root));
   const tdd = deps.loadTddState(root);
   if (!tdd.ok) {
     deps.tddLog(tddDir, "WARN", "next_tdd_phase: TDD not active", {
@@ -3117,7 +3211,7 @@ ${deps.getNudgePrompt(to, config)}`
   };
 }
 async function runPreviousPhase(root, deps = defaultPreviousPhaseDeps, hints = PI_HINTS) {
-  const tddDir = join7(root, resolveTddDir(root));
+  const tddDir = join8(root, resolveTddDir(root));
   const tdd = deps.loadTddState(root);
   if (!tdd.ok) {
     deps.tddLog(tddDir, "WARN", "previous_tdd_phase: TDD not active", {
@@ -3165,7 +3259,7 @@ ${result.message} Working tree has the previous snapshot content as unstaged cha
   };
 }
 async function runTddStatus(root, deps = defaultTddStatusDeps) {
-  const tddDir = join7(root, resolveTddDir(root));
+  const tddDir = join8(root, resolveTddDir(root));
   const result = deps.loadTddState(root);
   if (!result.ok) {
     deps.tddLog(tddDir, "WARN", "tdd_status: TDD not active", {

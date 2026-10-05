@@ -39,6 +39,12 @@ export {
 export { getNudgePrompt } from "./prompts.js";
 export type { TddLoadResult } from "./state.js";
 export { loadPhaseState, loadTddState, savePhaseState } from "./state.js";
+export type { TddFilesDeps, TddSnapshot } from "./tdd-files.js";
+export {
+	captureTddFiles,
+	emptyTddSnapshot,
+	restoreTddFiles,
+} from "./tdd-files.js";
 export { checkGate, getDisallowedChanges, nextPhase } from "./transition.js";
 export type {
 	Config,

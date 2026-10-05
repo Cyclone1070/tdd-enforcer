@@ -1,6 +1,6 @@
 {
 	"name": "tdd-enforcer",
-	"version": "0.5.0",
+	"version": "0.6.0",
 	"type": "module",
 	"description": "TDD enforcer plugin — enforces Red-Green phases with file access restrictions and transition gates, for the pi coding agent and the DeepSeek Harness",
 	"license": "MIT",

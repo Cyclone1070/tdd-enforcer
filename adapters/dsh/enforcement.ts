@@ -22,10 +22,13 @@ import {
 	gitStashCreate,
 	restoreFilesTo,
 } from "../../engine/git.js";
+import type { TddSnapshot } from "../../engine/index.js";
 import {
+	captureTddFiles,
 	isTddPath,
 	loadTddState,
 	resolveTddDir,
+	restoreTddFiles,
 	tddLog,
 } from "../../engine/index.js";
 import type { Config, Phase } from "../../engine/types.js";
@@ -94,6 +97,12 @@ const BOOKKEEPING_DENIAL =
 
 export interface Bracket {
 	stashHash: string;
+	/**
+	 * Byte-exact copy of the TDD directories, taken before the call. They are
+	 * restored from this rather than from git, which cannot see a nested `.git`
+	 * or anything the private repo ignores.
+	 */
+	tddFiles: TddSnapshot;
 	phase: Phase;
 	config: Config;
 	root: string;
@@ -207,8 +216,19 @@ export class TddEnforcer {
 
 		try {
 			const stashHash = gitStashCreate(root);
+
+			// The capture must come AFTER this call's own log line. The plugin
+			// writes to tdd.log itself, so anything it writes between the
+			// capture and the restore would come back as damage the call caused.
+			tddLog(tddDir, "DEBUG", "bracket: opened", {
+				toolName: exec.name,
+				callId: exec.callId,
+				stashHash,
+			});
+
 			this.brackets.set(exec.callId, {
 				stashHash,
+				tddFiles: captureTddFiles(root),
 				phase: tdd.state.current,
 				config: tdd.config,
 				root,
@@ -217,11 +237,6 @@ export class TddEnforcer {
 				at: Date.now(),
 			});
 			this.pruneBrackets();
-			tddLog(tddDir, "DEBUG", "bracket: opened", {
-				toolName: exec.name,
-				callId: exec.callId,
-				stashHash,
-			});
 		} catch (error) {
 			tddLog(tddDir, "ERROR", "bracket: snapshot failed", {
 				toolName: exec.name,
@@ -247,11 +262,9 @@ export class TddEnforcer {
 		const jobId = backgroundJobId(result);
 		if (jobId !== undefined) {
 			// The process is still running; the job subscription closes this one.
+			// Nothing is logged here on purpose: this bracket is still open, and
+			// a log line written now would look like damage when it settles.
 			this.jobBrackets.set(jobId, bracket);
-			tddLog(this.tddDir(bracket.root), "DEBUG", "bracket: handed to job", {
-				toolName: exec.name,
-				jobId,
-			});
 			return undefined;
 		}
 
@@ -291,21 +304,44 @@ export class TddEnforcer {
 		const { root, stashHash, phase, config } = bracket;
 		const tddDir = this.tddDir(root);
 
+		// The TDD directories come back from memory, and this runs before — and
+		// independently of — the git diff. Git cannot see a nested `.git` or an
+		// ignored file, so it is the wrong instrument for them, and the diff may
+		// not even be available if the call destroyed the private store.
+		let tddViolations: string[] = [];
+		try {
+			tddViolations = restoreTddFiles(root, bracket.tddFiles);
+		} catch (error) {
+			tddLog(tddDir, "ERROR", "bracket: TDD directory restore failed", {
+				toolName: bracket.toolName,
+				error: (error as Error).message,
+			});
+		}
+
 		let changed: string[];
 		try {
 			changed = changesSince(root, stashHash);
 		} catch (error) {
+			// A destroyed store costs the diff, not the revert: the TDD
+			// directories above were already restored from memory.
 			tddLog(tddDir, "ERROR", "bracket: diff failed", {
 				toolName: bracket.toolName,
 				error: (error as Error).message,
 			});
-			return undefined;
+			changed = [];
 		}
-		if (changed.length === 0) return undefined;
 
-		const tddViolations = changed.filter((f) => isTddPath(f));
-		const phaseViolations = changed.filter((f) => !isAllowed(f, phase, config));
-		const violations = [...new Set([...tddViolations, ...phaseViolations])];
+		// The memory pass above already put the TDD directories back, so these
+		// are the paths git can see and memory reported; restoring them again
+		// from the baseline is a no-op. The log never appears here — it is
+		// ignored, which is exactly why memory has to own it.
+		const tddFromGit = changed.filter((f) => isTddPath(f));
+		const phaseViolations = changed.filter(
+			(f) => !isTddPath(f) && !isAllowed(f, phase, config),
+		);
+		const violations = [
+			...new Set([...tddViolations, ...tddFromGit, ...phaseViolations]),
+		];
 		if (violations.length === 0) {
 			tddLog(tddDir, "DEBUG", "bracket: no violations among changed files", {
 				toolName: bracket.toolName,
@@ -315,8 +351,8 @@ export class TddEnforcer {
 		}
 
 		try {
-			if (tddViolations.length > 0) {
-				restoreFilesTo(root, tddViolations, stashHash);
+			if (tddFromGit.length > 0) {
+				restoreFilesTo(root, tddFromGit, stashHash);
 			}
 			if (phaseViolations.length > 0) {
 				restoreFilesTo(root, phaseViolations, stashHash);

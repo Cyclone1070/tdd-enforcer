@@ -88,12 +88,14 @@ export async function advancePhase(
 		return { ok: false, message: gate.message };
 	}
 
-	// 3. Snapshot
-	snap(root, from);
-
-	// 4. Save state
+	// 3. Save state, then snapshot. The commit has to contain the state the
+	//    tree actually has, or the phase change is left behind as an
+	//    uncommitted diff against HEAD.
 	const newState: PhaseState = { ...state, current: to };
 	sps(root, newState);
+
+	// 4. Snapshot
+	snap(root, from);
 
 	return { ok: true, message: "", newState };
 }
@@ -143,11 +145,13 @@ export async function revertPhase(
 	const label = parseTddLabel(headMsg);
 	if (!label) return repair();
 
+	// Pop the last snapshot first, then discard uncommitted changes against the
+	// commit that is now HEAD. The other order leaves HEAD one commit behind the
+	// tree, which reads as a permanent diff.
+	ulc(root);
+
 	// Nuke uncommitted changes
 	rh(root);
-
-	// Pop last snapshot
-	ulc(root);
 
 	// Update phase
 	const newState: PhaseState = { ...state, current: label };
