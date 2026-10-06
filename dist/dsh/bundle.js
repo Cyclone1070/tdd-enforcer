@@ -1909,11 +1909,19 @@ function bookkeepingFiles(dir) {
     `${dir}/${GITIGNORE_FILE}`
   ];
 }
+var PRIVATE_REPO_IDENTITY = {
+  name: "tdd-enforcer",
+  email: "tdd-enforcer@localhost"
+};
 function gitEnv(projectRoot, deps) {
   const gitDir = join2(tddRoot(projectRoot, deps), ".git");
   return {
     GIT_DIR: gitDir,
-    GIT_WORK_TREE: projectRoot
+    GIT_WORK_TREE: projectRoot,
+    GIT_AUTHOR_NAME: PRIVATE_REPO_IDENTITY.name,
+    GIT_AUTHOR_EMAIL: PRIVATE_REPO_IDENTITY.email,
+    GIT_COMMITTER_NAME: PRIVATE_REPO_IDENTITY.name,
+    GIT_COMMITTER_EMAIL: PRIVATE_REPO_IDENTITY.email
   };
 }
 function gitExec(args, projectRoot, deps, options) {

@@ -53,11 +53,26 @@ function bookkeepingFiles(dir: string): string[] {
 	];
 }
 
+/**
+ * Identity for the private repo's commits. The private repo is the plugin's own
+ * bookkeeping, so it does not borrow the host's git identity — which also means
+ * the plugin still works where no identity is configured at all, such as a bare
+ * CI runner or a fresh container, instead of failing on its very first commit.
+ */
+const PRIVATE_REPO_IDENTITY = {
+	name: "tdd-enforcer",
+	email: "tdd-enforcer@localhost",
+} as const;
+
 function gitEnv(projectRoot: string, deps: GitDeps): NodeJS.ProcessEnv {
 	const gitDir = join(tddRoot(projectRoot, deps), ".git");
 	return {
 		GIT_DIR: gitDir,
 		GIT_WORK_TREE: projectRoot,
+		GIT_AUTHOR_NAME: PRIVATE_REPO_IDENTITY.name,
+		GIT_AUTHOR_EMAIL: PRIVATE_REPO_IDENTITY.email,
+		GIT_COMMITTER_NAME: PRIVATE_REPO_IDENTITY.name,
+		GIT_COMMITTER_EMAIL: PRIVATE_REPO_IDENTITY.email,
 	};
 }
 
