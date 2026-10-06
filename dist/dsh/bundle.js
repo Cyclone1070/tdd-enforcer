@@ -1919,6 +1919,13 @@ function gitEnv(projectRoot, deps) {
 function gitExec(args, projectRoot, deps, options) {
   const env = { ...process.env, ...gitEnv(projectRoot, deps) };
   return deps.execSync(`git ${args}`, {
+    // Node sends a child's stderr to the parent's stderr unless `stdio`
+    // says otherwise, so an unpiped failure prints raw git noise into
+    // the host's console. Several callers treat a failure as an expected
+    // outcome — a destroyed private store, a corrupt history — and
+    // report it properly through tddLog, so the child must stay quiet.
+    // A caller that wants something else still overrides this.
+    stdio: "pipe",
     ...options,
     env,
     // Every git call runs from the project root so path output and

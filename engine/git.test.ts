@@ -2,6 +2,7 @@ import { join } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { GitDeps } from "./git.js";
 import {
+	changesSince,
 	changesSinceSnapshot,
 	gitStashCreate,
 	hasParent,
@@ -230,6 +231,25 @@ describe("git operations", () => {
 		);
 		expect(addAIndex).toBeLessThan(forceAddIndex);
 		expect(forceAddIndex).toBeLessThan(commitIndex);
+	});
+
+	it("pipes stderr so a failing command stays out of the host console", () => {
+		const stdio: unknown[] = [];
+		const spy = vi.fn((_cmd: string, options: { stdio?: unknown }) => {
+			stdio.push(options.stdio);
+			return Buffer.from("");
+		});
+		deps = { ...makeDeps(), execSync: spy as any };
+
+		changesSince("/test", "HEAD", deps);
+
+		// Node hands a child's stderr to the parent's stderr unless `stdio`
+		// says otherwise, so an unpiped failure prints raw git noise into the
+		// console. Several callers treat a failure as expected — a destroyed
+		// private store, a corrupt history — and report it through tddLog, so
+		// the child has to stay quiet.
+		expect(stdio.length).toBeGreaterThan(0);
+		expect(stdio.every((value) => value === "pipe")).toBe(true);
 	});
 });
 
